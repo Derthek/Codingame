@@ -353,7 +353,7 @@ public static class Algorithm
             }
             foreach (int neighbor in Game.Map[current].Neighbors)
             {
-                if (!distance.ContainsKey(neighbor))
+                if (!distance.ContainsKey(neighbor) && neighbor >= 0)
                 {
                     neighborDistance = currentDistance + 1;
                     queue.Enqueue(neighbor);

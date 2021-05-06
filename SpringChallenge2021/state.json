@@ -1,0 +1,95 @@
+{
+  "Turn": 0,
+  "Players": [
+    {
+      "Score": 0,
+      "Sun": 18,
+      "Owner": 1,
+      "IsWaiting": "False",
+      "Trees": [
+        {
+          "Index": 6,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        },
+        {
+          "Index": 7,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        },
+        {
+          "Index": 9,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        },
+        {
+          "Index": 17,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        },
+        {
+          "Index": 26,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        },
+        {
+          "Index": 30,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        }
+      ]
+    },
+    {
+      "Score": 0,
+      "Sun": 18,
+      "Owner": 2,
+      "IsWaiting": "False",
+      "Trees": [
+        {
+          "Index": 3,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        },
+        {
+          "Index": 11,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        },
+        {
+          "Index": 13,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        },
+        {
+          "Index": 15,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        },
+        {
+          "Index": 21,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        },
+        {
+          "Index": 35,
+          "Size": 3,
+          "IsDormant": "False",
+          "Owner": 0
+        }
+      ]
+    }
+  ],
+  "Day": 0,
+  "Nutrients": 20
+}

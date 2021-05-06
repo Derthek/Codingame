@@ -14,8 +14,7 @@ public class Program
         while (true)
         {
             Game.ReadInput();
-            chosenTree = Game.State.Me.Trees.OrderByDescending(tree => Game.Map[tree.Index].Richness).First();
-            Console.Error.WriteLine(chosenTree.ToString());
+            chosenTree = Game.State.Me.Trees.OrderByDescending(tree => Game.Map[tree.Index].Richness).FirstOrDefault(tree => Player.CanComplete(Game.State,Game.State.Me,tree));
             Game.Complete(chosenTree);
 
             // GROW cellIdx | SEED sourceIdx targetIdx | COMPLETE cellIdx | WAIT <message>
@@ -79,6 +78,12 @@ public static class Game
         
         State = State.Update(State, new Action() { Index = tree.Index, Type = ActionType.Complete });
     }
+    public static void Grow(Tree tree)
+    {
+        if (tree is null) return;
+
+        State = State.Update(State, new Action() { Index = tree.Index, Type = ActionType.Grow });
+    }
 }
 public class State : ICloneable<State>
 {
@@ -102,6 +107,8 @@ public class State : ICloneable<State>
                 return ReadInput(state, action);
             case ActionType.Complete:
                 return Complete(state, action);
+            case ActionType.Grow:
+                return Grow(state, action);
             case ActionType.Send:
                 return Send(state);
             default:
@@ -134,7 +141,7 @@ public class State : ICloneable<State>
             newState.Players[playerIndex - 1].Trees.Add(new Tree()
             {
                 Index = int.Parse(inputs[0]),
-                Size = int.Parse(inputs[1]),
+                Size = (TreeSize)int.Parse(inputs[1]),
                 IsDormant = inputs[3] != "0",
             });
         }
@@ -146,6 +153,11 @@ public class State : ICloneable<State>
         return newState;
     }
     public static State Complete(State state, Action action)
+    {
+        Game.Actions.Add(action);
+        return state;//TODO: Update state
+    }
+    public static State Grow(State state, Action action)
     {
         Game.Actions.Add(action);
         return state;//TODO: Update state
@@ -197,6 +209,15 @@ public class Player : ICloneable<Player>
     {
         return $"{{Score:{Score},Sun:{Sun},Owner:{Owner},IsWaiting:{IsWaiting},Trees:{Trees?.ToString<Tree>() ?? "[]"}}}";
     }
+
+    public static bool CanComplete(State state, Player player, Tree tree)
+    {
+        return state.Nutrients > 0 && player.Sun >= Tree.CompleteCost && tree.Size == TreeSize.Big && !tree.IsDormant;
+    }
+    public static bool CanGrow(Player player, Tree tree)
+    {
+        return player.Sun >= Tree.GrowCost(tree,player.Trees) && tree.Size != TreeSize.Big && !tree.IsDormant;
+    }
     public Player Clone()
     {
         return new Player()
@@ -211,13 +232,27 @@ public class Player : ICloneable<Player>
 }
 public class Tree: ICloneable<Tree>
 {
+    public static readonly int CompleteCost = 4;
     public int Index { get; set; }
-    public int Size { get; set; }
+    public TreeSize Size { get; set; }
     public bool IsDormant { get; set; }
     public int Owner { get; set; }
     public override string ToString()
     {
-        return $"{{Index:{Index},Size:{Size},IsDormant:{IsDormant},Owner:{Owner}}}";
+        return $"{{Index:{Index},Size:{(int)Size},IsDormant:{IsDormant},Owner:{Owner}}}";
+    }
+    public static int GrowCost(Tree tree, List<Tree> trees)
+    {
+        switch (tree.Size)
+        {
+            case TreeSize.Small:
+                return 3 + trees.Count(t => t.Size == TreeSize.Medium);
+            case TreeSize.Medium:
+                return 7 + trees.Count(t => t.Size == TreeSize.Big);
+            case TreeSize.Big:
+            default:
+                return 999;
+        }
     }
     public Tree Clone()
     {
@@ -261,6 +296,7 @@ public class Action
         switch (Type)
         {
             case ActionType.Complete:
+            case ActionType.Grow:
                 result += $" {Index}";
                 break;
             //case ActionType.Cast:
@@ -305,9 +341,16 @@ public interface ICloneable<T>
 {
     T Clone();
 }
+public enum TreeSize
+{
+    Small= 1,
+    Medium = 2,
+    Big = 3
+}
 public enum ActionType
 {
     ReadInput,
     Complete,
+    Grow,
     Send
 }

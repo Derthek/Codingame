@@ -10,17 +10,16 @@ public class Program
     static void Main(string[] args)
     {
         Game.ReadMap();
-
+        Tree chosenTree;
         while (true)
         {
             Game.ReadInput();
-            foreach(Tree tree in Game.State.Me.Trees)
-            {
-                Game.Map[tree.Index].Richness
-            }
-            Game.Complete();
+            chosenTree = Game.State.Me.Trees.OrderByDescending(tree => Game.Map[tree.Index].Richness).First();
+            Console.Error.WriteLine(chosenTree.ToString());
+            Game.Complete(chosenTree);
+
             // GROW cellIdx | SEED sourceIdx targetIdx | COMPLETE cellIdx | WAIT <message>
-            Console.WriteLine("WAIT");
+            Game.State = State.Update(Game.State, new Action() { Type = ActionType.Send });
 #if DEBUG
             break;
 #endif

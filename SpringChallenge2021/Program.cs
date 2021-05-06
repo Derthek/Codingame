@@ -10,6 +10,8 @@ public class Program
     static void Main(string[] args)
     {
         Game.ReadMap();
+        Game.PopulateDistances();
+
         Tree chosenTree;
         while (true)
         {
@@ -37,7 +39,9 @@ public class Program
 
 public static class Game
 {
-    public static Cell[] Map { get; set; } = new Cell[37];
+    public static readonly int MAP_SIZE = 37;
+    public static Cell[] Map { get; set; } = new Cell[MAP_SIZE];
+    public static int[][] Distances { get; set; } = new int[MAP_SIZE][];
     public static State State = new State();
     public static List<Action> Actions = new List<Action>();
 
@@ -93,20 +97,34 @@ public static class Game
 
         State = State.Update(State, new Action() { Index = tree.Index, Type = ActionType.Grow });
     }
+    public static void Seed(Tree tree, int target)
+    {
+        if (tree is null) return;
+
+        State = State.Update(State, new Action() { Index = tree.Index, Target = target, Type = ActionType.Grow });
+    }
+
+    public static void PopulateDistances()
+    {
+        for (int i = 0; i < MAP_SIZE; i++)
+        {
+            Distances[i] = Algorithm.BFSDistances(MAP_SIZE, i);
+        }
+    }
 }
 public class State : ICloneable<State>
 {
     public int Turn { get; set; }
     public int Day { get; set; }
+    public int SunDirection => Day % 6;
     public int Nutrients { get; set; }
-
+    public int[] MapAllocation { get; set; } = new int[Game.MAP_SIZE];
     public Player[] Players { get; set; } = new Player[2];
-
     public Player Me => Players[0];
     public Player Opponent => Players[1];
     public override string ToString()
     {
-        return $"{{Turn:{Turn},Players:{Players.ToString<Player>()},Day:{Day},Nutrients:{Nutrients}}}";
+        return $"{{Turn:{Turn},Players:{Players.ToString<Player>()},Day:{Day},Nutrients:{Nutrients},MapAllocation:{MapAllocation.ToString<int>()}}}";
     }
     public static State Update(State state, Action action)
     {
@@ -118,6 +136,8 @@ public class State : ICloneable<State>
                 return Complete(state, action);
             case ActionType.Grow:
                 return Grow(state, action);
+            case ActionType.Seed:
+                return Seed(state, action);
             case ActionType.Send:
                 return Send(state);
             default:
@@ -147,9 +167,11 @@ public class State : ICloneable<State>
         {
             inputs = Console.ReadLine().Split(' ');
             int playerIndex = inputs[2] != "0" ? Player.Me : Player.Opponent;
+            int index = int.Parse(inputs[0]);
+            newState.MapAllocation[index] = 1;
             newState.Players[playerIndex - 1].Trees.Add(new Tree()
             {
-                Index = int.Parse(inputs[0]),
+                Index = index,
                 Size = (TreeSize)int.Parse(inputs[1]),
                 IsDormant = inputs[3] != "0",
             });
@@ -167,6 +189,11 @@ public class State : ICloneable<State>
         return Send(state);//TODO: Update state
     }
     public static State Grow(State state, Action action)
+    {
+        Game.Actions.Add(action);
+        return Send(state);//TODO: Update state
+    }
+    public static State Seed(State state, Action action)
     {
         Game.Actions.Add(action);
         return Send(state);//TODO: Update state
@@ -196,7 +223,8 @@ public class State : ICloneable<State>
             Turn = Turn,
             Players = Players.Clone<Player>(),
             Day = Day,
-            Nutrients = Nutrients
+            Nutrients = Nutrients,
+            MapAllocation = MapAllocation.DeepCopy()
         };
     }
 }
@@ -221,11 +249,15 @@ public class Player : ICloneable<Player>
 
     public static bool CanComplete(State state, Player player, Tree tree)
     {
-        return state.Nutrients > 0 && player.Sun >= Tree.CompleteCost && tree.Size == TreeSize.Big && !tree.IsDormant;
+        return tree.Size == TreeSize.Big && !tree.IsDormant && state.Nutrients > 0 && player.Sun >= Tree.CompleteCost;
     }
     public static bool CanGrow(Player player, Tree tree)
     {
-        return player.Sun >= Tree.GrowCost(tree, player.Trees) && tree.Size != TreeSize.Big && !tree.IsDormant;
+        return tree.Size != TreeSize.Big && !tree.IsDormant && player.Sun >= Tree.GrowCost(tree, player.Trees);
+    }
+    public static bool CanSeed(State state, Player player, Tree tree, int target)
+    {
+        return !tree.IsDormant && Game.Map[target].Richness > 0 && Game.Distances[tree.Index][target] <= (int)tree.Size && state.MapAllocation[target] == 0 && player.Sun >= Tree.SeedCost(player.Trees);
     }
     public Player Clone()
     {
@@ -254,6 +286,8 @@ public class Tree : ICloneable<Tree>
     {
         switch (tree.Size)
         {
+            case TreeSize.Seed:
+                return 1 + trees.Count(t => t.Size == TreeSize.Small);
             case TreeSize.Small:
                 return 3 + trees.Count(t => t.Size == TreeSize.Medium);
             case TreeSize.Medium:
@@ -262,6 +296,10 @@ public class Tree : ICloneable<Tree>
             default:
                 return 999;
         }
+    }
+    public static int SeedCost(List<Tree> trees)
+    {
+        return trees.Count(t => t.Size == TreeSize.Seed);
     }
     public Tree Clone()
     {
@@ -294,11 +332,44 @@ public class Cell : ICloneable<Cell>
         };
     }
 }
+public static class Algorithm
+{
+    public static int[] BFSDistances(int size, int from)
+    {
+        int[] res = new int[size];
+        Queue<int> queue = new Queue<int>();
+        Dictionary<int, int> distance = new Dictionary<int, int>();
+        int current;
+        int currentDistance;
+        int neighborDistance;
+        queue.Enqueue(from);
+        distance.Add(from, 0);
+        while (queue.Count > 0)
+        {
+            current = queue.Dequeue();
+            if (!distance.TryGetValue(current, out currentDistance))
+            {
+                throw new Exception("Pathfinding.BFS: Failed to get path.");
+            }
+            foreach (int neighbor in Game.Map[current].Neighbors)
+            {
+                if (!distance.ContainsKey(neighbor))
+                {
+                    neighborDistance = currentDistance + 1;
+                    queue.Enqueue(neighbor);
+                    distance.Add(neighbor, neighborDistance);
+                    res[neighbor] = neighborDistance;
+                }
+            }
+        }
+        return res;
+    }
+}
 public class Action
 {
     public ActionType Type { get; set; }
     public int Index { get; set; }
-    //public int Times { get; set; }
+    public int Target { get; set; }
     public override string ToString()
     {
         string result = $"{Type.ToString().ToUpper()}";
@@ -308,9 +379,9 @@ public class Action
             case ActionType.Grow:
                 result += $" {Index}";
                 break;
-            //case ActionType.Cast:
-            //    result += $" {Id} {Times}";
-            //    break;
+            case ActionType.Seed:
+                result += $" {Index} {Target}";
+                break;
             default:
                 break;
         }
@@ -352,6 +423,7 @@ public interface ICloneable<T>
 }
 public enum TreeSize
 {
+    Seed = 0,
     Small = 1,
     Medium = 2,
     Big = 3
@@ -361,5 +433,6 @@ public enum ActionType
     ReadInput,
     Complete,
     Grow,
+    Seed,
     Send
 }

@@ -14,9 +14,18 @@ public class Program
         while (true)
         {
             Game.ReadInput();
-            chosenTree = Game.State.Me.Trees.OrderByDescending(tree => Game.Map[tree.Index].Richness).FirstOrDefault(tree => Player.CanComplete(Game.State,Game.State.Me,tree));
-            Game.Complete(chosenTree);
-
+            chosenTree = Game.State.Me.Trees.FirstOrDefault(tree => Player.CanComplete(Game.State, Game.State.Me, tree));
+            if (chosenTree != null && (Game.State.Me.Trees.Count(t => t.Size == TreeSize.Big) > 1 || Game.State.Day >= 5))
+            {
+                Game.Complete(chosenTree);
+                continue;
+            }
+            chosenTree = Game.State.Me.Trees.FirstOrDefault(tree => Player.CanGrow(Game.State.Me, tree));
+            if (chosenTree != null)
+            {
+                Game.Grow(chosenTree);
+                continue;
+            }
             // GROW cellIdx | SEED sourceIdx targetIdx | COMPLETE cellIdx | WAIT <message>
             Game.State = State.Update(Game.State, new Action() { Type = ActionType.Send });
 #if DEBUG
@@ -75,7 +84,7 @@ public static class Game
     public static void Complete(Tree tree)
     {
         if (tree is null) return;
-        
+
         State = State.Update(State, new Action() { Index = tree.Index, Type = ActionType.Complete });
     }
     public static void Grow(Tree tree)
@@ -121,7 +130,7 @@ public class State : ICloneable<State>
         string[] inputs;
         newState.Day = int.Parse(Console.ReadLine()); // the game lasts 24 days: 0-23
         newState.Nutrients = int.Parse(Console.ReadLine());
-        for(int i = 0; i < 2; i++)
+        for (int i = 0; i < 2; i++)
         {
             inputs = Console.ReadLine().Split(' ');
             newState.Players[i] = new Player()
@@ -155,12 +164,12 @@ public class State : ICloneable<State>
     public static State Complete(State state, Action action)
     {
         Game.Actions.Add(action);
-        return state;//TODO: Update state
+        return Send(state);//TODO: Update state
     }
     public static State Grow(State state, Action action)
     {
         Game.Actions.Add(action);
-        return state;//TODO: Update state
+        return Send(state);//TODO: Update state
     }
     public static State Send(State state)
     {
@@ -216,7 +225,7 @@ public class Player : ICloneable<Player>
     }
     public static bool CanGrow(Player player, Tree tree)
     {
-        return player.Sun >= Tree.GrowCost(tree,player.Trees) && tree.Size != TreeSize.Big && !tree.IsDormant;
+        return player.Sun >= Tree.GrowCost(tree, player.Trees) && tree.Size != TreeSize.Big && !tree.IsDormant;
     }
     public Player Clone()
     {
@@ -230,7 +239,7 @@ public class Player : ICloneable<Player>
         };
     }
 }
-public class Tree: ICloneable<Tree>
+public class Tree : ICloneable<Tree>
 {
     public static readonly int CompleteCost = 4;
     public int Index { get; set; }
@@ -343,7 +352,7 @@ public interface ICloneable<T>
 }
 public enum TreeSize
 {
-    Small= 1,
+    Small = 1,
     Medium = 2,
     Big = 3
 }

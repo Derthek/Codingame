@@ -16,19 +16,18 @@ public class Program
         while (true)
         {
             Game.ReadInput();
-            chosenTree = Game.State.Me.Trees.FirstOrDefault(tree => Player.CanComplete(Game.State, Game.State.Me, tree));
-            if (chosenTree != null && (Game.State.Me.Trees.Count(t => t.Size == TreeSize.Big) > 1 || Game.State.Day >= 5))
+            chosenTree = Game.State.Trees.Values.FirstOrDefault(tree => tree.Owner == Player.Me && Player.CanComplete(Game.State, Game.State.Me, tree));
+            if (chosenTree != null && (Game.State.Me.Trees.Count(t => Game.State.Trees[t].Size == TreeSize.Big) > 1 || Game.State.Day >= 5))
             {
                 Game.Complete(chosenTree);
                 continue;
             }
-            chosenTree = Game.State.Me.Trees.FirstOrDefault(tree => Player.CanGrow(Game.State.Me, tree));
+            chosenTree = Game.State.Trees.Values.FirstOrDefault(tree => tree.Owner == Player.Me && Player.CanGrow(Game.State, Game.State.Me, tree));
             if (chosenTree != null)
             {
                 Game.Grow(chosenTree);
                 continue;
             }
-            // GROW cellIdx | SEED sourceIdx targetIdx | COMPLETE cellIdx | WAIT <message>
             Game.State = State.Update(Game.State, new Action() { Type = ActionType.Send });
 #if DEBUG
             break;
@@ -40,6 +39,7 @@ public class Program
 public static class Game
 {
     public static readonly int MAP_SIZE = 37;
+    public static readonly int END_GAME_DAY = 24;
     public static Cell[] Map { get; set; } = new Cell[MAP_SIZE];
     public static int[][] Distances { get; set; } = new int[MAP_SIZE][];
     public static State State = new State();
@@ -89,19 +89,19 @@ public static class Game
     {
         if (tree is null) return;
 
-        State = State.Update(State, new Action() { Index = tree.Index, Type = ActionType.Complete });
+        State = State.Update(State, new Action() { Source = tree, Type = ActionType.Complete });
     }
     public static void Grow(Tree tree)
     {
         if (tree is null) return;
 
-        State = State.Update(State, new Action() { Index = tree.Index, Type = ActionType.Grow });
+        State = State.Update(State, new Action() { Source = tree, Type = ActionType.Grow });
     }
-    public static void Seed(Tree tree, int target)
+    public static void Seed(Tree tree, Tree target)
     {
         if (tree is null) return;
 
-        State = State.Update(State, new Action() { Index = tree.Index, Target = target, Type = ActionType.Grow });
+        State = State.Update(State, new Action() { Source = tree, Target = target, Type = ActionType.Grow });
     }
 
     public static void PopulateDistances()
@@ -118,13 +118,13 @@ public class State : ICloneable<State>
     public int Day { get; set; }
     public int SunDirection => Day % 6;
     public int Nutrients { get; set; }
-    public int[] MapAllocation { get; set; } = new int[Game.MAP_SIZE];
-    public Player[] Players { get; set; } = new Player[2];
-    public Player Me => Players[0];
-    public Player Opponent => Players[1];
+    public Dictionary<int,Tree> Trees { get; set; } = new Dictionary<int, Tree>();
+    public Player[] Players { get; set; } = new Player[3];
+    public Player Me => Players[Player.Me];
+    public Player Opponent => Players[Player.Opponent];
     public override string ToString()
     {
-        return $"{{Turn:{Turn},Players:{Players.ToString<Player>()},Day:{Day},Nutrients:{Nutrients},MapAllocation:{MapAllocation.ToString<int>()}}}";
+        return $"{{Turn:{Turn},Players:{Players.ToString<Player>()},Day:{Day},Nutrients:{Nutrients},Trees:{Trees.ToString<Tree>()}}}";
     }
     public static State Update(State state, Action action)
     {
@@ -147,20 +147,23 @@ public class State : ICloneable<State>
     public static State ReadInput(State state, Action action)
     {
         State newState = state.Clone();
+        newState.Trees = new Dictionary<int, Tree>();
+        Tree tree;
         string[] inputs;
         newState.Day = int.Parse(Console.ReadLine()); // the game lasts 24 days: 0-23
         newState.Nutrients = int.Parse(Console.ReadLine());
         for (int i = 0; i < 2; i++)
         {
             inputs = Console.ReadLine().Split(' ');
-            newState.Players[i] = new Player()
+            int owner = i + 1;
+            newState.Players[owner] = new Player()
             {
-                Owner = i + 1,
+                Owner = owner,
                 Score = int.Parse(inputs[1]),
                 Sun = int.Parse(inputs[0]),
-                Trees = new List<Tree>()
+                Trees = new List<int>()
             };
-            if (inputs.Length > 2) newState.Players[i].IsWaiting = inputs[2] != "0";
+            if (inputs.Length > 2) newState.Players[owner].IsWaiting = inputs[2] != "0";
         }
         int numberOfTrees = int.Parse(Console.ReadLine());
         for (int i = 0; i < numberOfTrees; i++)
@@ -168,13 +171,14 @@ public class State : ICloneable<State>
             inputs = Console.ReadLine().Split(' ');
             int playerIndex = inputs[2] != "0" ? Player.Me : Player.Opponent;
             int index = int.Parse(inputs[0]);
-            newState.MapAllocation[index] = 1;
-            newState.Players[playerIndex - 1].Trees.Add(new Tree()
+            tree = new Tree()
             {
                 Index = index,
                 Size = (TreeSize)int.Parse(inputs[1]),
                 IsDormant = inputs[3] != "0",
-            });
+            };
+            newState.Trees[index] = tree;
+            newState.Players[playerIndex].Trees.Add(index);
         }
         int numberOfPossibleMoves = int.Parse(Console.ReadLine());
         for (int i = 0; i < numberOfPossibleMoves; i++)
@@ -186,6 +190,7 @@ public class State : ICloneable<State>
     public static State Complete(State state, Action action)
     {
         Game.Actions.Add(action);
+        //state.Players[action.Player]
         return Send(state);//TODO: Update state
     }
     public static State Grow(State state, Action action)
@@ -198,6 +203,10 @@ public class State : ICloneable<State>
         Game.Actions.Add(action);
         return Send(state);//TODO: Update state
     }
+    //public static State Simulate(State state)
+    //{
+
+    //}
     public static State Send(State state)
     {
         if (Game.Actions.Count == 0)
@@ -206,7 +215,7 @@ public class State : ICloneable<State>
         }
         else
         {
-            Console.WriteLine(string.Join(" | ", Game.Actions.Select(a => a.ToString())));
+            Console.WriteLine(Game.Actions[0].ToString());
         }
         Game.Actions = new List<Action>();
         //Game.Decisions = new List<Decision>();
@@ -215,7 +224,35 @@ public class State : ICloneable<State>
         state.Turn++;
         return state;
     }
+    public static double Score(State state, int playerOwner)
+    {
+        int scoreMe = state.Me.Score + (int)(state.Me.Sun / 3.0);
+        int scoreOpponent = state.Opponent.Score + (int)(state.Opponent.Sun / 3.0);
+        if (scoreMe == scoreOpponent)
+        {
+            scoreMe += state.Me.Trees.Count;
+            scoreOpponent += state.Opponent.Trees.Count;
+        }
+        int multiplier = playerOwner == Player.Me ? 1 : -1;
 
+        return multiplier * (scoreMe - scoreOpponent);
+    }
+    public static bool IsEndGame(State state)
+    {
+        return state.Day == Game.END_GAME_DAY;
+    }
+    public static Winner Evaluation(double score)
+    {
+        if (score == 0) return Winner.Draw;
+        else if (score > 0) return Winner.Me;
+        else return Winner.Opponent;
+    }
+    public enum Winner
+    {
+        Me = 10,
+        Opponent = -10,
+        Draw = 0
+    }
     public State Clone()
     {
         return new State()
@@ -224,7 +261,7 @@ public class State : ICloneable<State>
             Players = Players.Clone<Player>(),
             Day = Day,
             Nutrients = Nutrients,
-            MapAllocation = MapAllocation.DeepCopy()
+            Trees = Trees.Clone()
         };
     }
 }
@@ -241,23 +278,28 @@ public class Player : ICloneable<Player>
     public int Owner { get; set; }
     public int Sun { get; set; }
     public bool IsWaiting { get; set; }
-    public List<Tree> Trees { get; set; }
+    public List<int> Trees { get; set; }
     public override string ToString()
     {
-        return $"{{Score:{Score},Sun:{Sun},Owner:{Owner},IsWaiting:{IsWaiting},Trees:{Trees?.ToString<Tree>() ?? "[]"}}}";
+        return $"{{Score:{Score},Sun:{Sun},Owner:{Owner},IsWaiting:{IsWaiting},Trees:{Trees?.ToString<int>() ?? "[]"}}}";
     }
 
     public static bool CanComplete(State state, Player player, Tree tree)
     {
+        if (tree == null) return false;
         return tree.Size == TreeSize.Big && !tree.IsDormant && state.Nutrients > 0 && player.Sun >= Tree.CompleteCost;
     }
-    public static bool CanGrow(Player player, Tree tree)
+    public static bool CanGrow(State state, Player player, Tree tree)
     {
-        return tree.Size != TreeSize.Big && !tree.IsDormant && player.Sun >= Tree.GrowCost(tree, player.Trees);
+        if (tree == null) return false;
+
+        return tree.Size != TreeSize.Big && !tree.IsDormant && player.Sun >= Tree.GrowCost(tree, player.Trees, state.Trees);
     }
     public static bool CanSeed(State state, Player player, Tree tree, int target)
     {
-        return !tree.IsDormant && Game.Map[target].Richness > 0 && Game.Distances[tree.Index][target] <= (int)tree.Size && state.MapAllocation[target] == 0 && player.Sun >= Tree.SeedCost(player.Trees);
+        if (tree == null) return false;
+
+        return !tree.IsDormant && Game.Map[target].Richness > 0 && Game.Distances[tree.Index][target] <= (int)tree.Size && state.Trees.ContainsKey(target) && player.Sun >= Tree.SeedCost(player.Trees,state.Trees);
     }
     public Player Clone()
     {
@@ -267,7 +309,7 @@ public class Player : ICloneable<Player>
             Owner = Owner,
             Sun = Sun,
             IsWaiting = IsWaiting,
-            Trees = Trees?.Clone()
+            Trees = Trees?.ToList()
         };
     }
 }
@@ -282,24 +324,24 @@ public class Tree : ICloneable<Tree>
     {
         return $"{{Index:{Index},Size:{(int)Size},IsDormant:{IsDormant},Owner:{Owner}}}";
     }
-    public static int GrowCost(Tree tree, List<Tree> trees)
+    public static int GrowCost(Tree tree, List<int> trees, Dictionary<int,Tree> treeCollection)
     {
         switch (tree.Size)
         {
             case TreeSize.Seed:
-                return 1 + trees.Count(t => t.Size == TreeSize.Small);
+                return 1 + trees.Count(t => treeCollection[t].Size == TreeSize.Small);
             case TreeSize.Small:
-                return 3 + trees.Count(t => t.Size == TreeSize.Medium);
+                return 3 + trees.Count(t => treeCollection[t].Size == TreeSize.Medium);
             case TreeSize.Medium:
-                return 7 + trees.Count(t => t.Size == TreeSize.Big);
+                return 7 + trees.Count(t => treeCollection[t].Size == TreeSize.Big);
             case TreeSize.Big:
             default:
                 return 999;
         }
     }
-    public static int SeedCost(List<Tree> trees)
+    public static int SeedCost(List<int> playerTrees, Dictionary<int,Tree> treeCollection)
     {
-        return trees.Count(t => t.Size == TreeSize.Seed);
+        return playerTrees.Count(tree => treeCollection[tree].Size == TreeSize.Seed);
     }
     public Tree Clone()
     {
@@ -368,8 +410,9 @@ public static class Algorithm
 public class Action
 {
     public ActionType Type { get; set; }
-    public int Index { get; set; }
-    public int Target { get; set; }
+    public Tree Source { get; set; }
+    public Tree Target { get; set; }
+    public int Player { get; set; }
     public override string ToString()
     {
         string result = $"{Type.ToString().ToUpper()}";
@@ -377,10 +420,10 @@ public class Action
         {
             case ActionType.Complete:
             case ActionType.Grow:
-                result += $" {Index}";
+                result += $" {Source.Index}";
                 break;
             case ActionType.Seed:
-                result += $" {Index} {Target}";
+                result += $" {Source.Index} {Target.Index}";
                 break;
             default:
                 break;
@@ -398,6 +441,10 @@ public static class Extensions
     {
         return $"[{string.Join(",", element)}]";
     }
+    public static string ToString<T>(this Dictionary<int,T> element)
+    {
+        return $"{{{string.Join(",", element)}}}";
+    }
     public static int[] DeepCopy(this int[] original)
     {
         return original.Select(elem => elem).ToArray();
@@ -406,6 +453,10 @@ public static class Extensions
     public static T[] Clone<T>(this T[] original) where T : class, ICloneable<T>
     {
         return original.Select(elem => elem?.Clone()).ToArray();
+    }
+    public static Dictionary<int,T> Clone<T>(this Dictionary<int,T> original) where T: class, ICloneable<T>
+    {
+        return new Dictionary<int, T>(original.Select(kv => new KeyValuePair<int, T>(kv.Key, kv.Value.Clone())));
     }
     public static List<T> Clone<T>(this List<T> original) where T : class, ICloneable<T>
     {

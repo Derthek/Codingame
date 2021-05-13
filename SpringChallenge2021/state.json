@@ -1,95 +1,78 @@
 {
-  "Turn": 0,
+  "Turn": 10,
   "Players": [
     {
       "Score": 0,
-      "Sun": 18,
+      "Sun": 0,
+      "Owner": 0,
+      "IsWaiting": "False",
+      "Trees": []
+    },
+    {
+      "Score": 20,
+      "Sun": 4,
       "Owner": 1,
       "IsWaiting": "False",
-      "Trees": [
-        {
-          "Index": 6,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        },
-        {
-          "Index": 7,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        },
-        {
-          "Index": 9,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        },
-        {
-          "Index": 17,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        },
-        {
-          "Index": 26,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        },
-        {
-          "Index": 30,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        }
-      ]
+      "Trees": [ 32 ]
     },
     {
       "Score": 0,
-      "Sun": 18,
+      "Sun": 5,
       "Owner": 2,
       "IsWaiting": "False",
-      "Trees": [
-        {
-          "Index": 3,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        },
-        {
-          "Index": 11,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        },
-        {
-          "Index": 13,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        },
-        {
-          "Index": 15,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        },
-        {
-          "Index": 21,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        },
-        {
-          "Index": 35,
-          "Size": 3,
-          "IsDormant": "False",
-          "Owner": 0
-        }
-      ]
+      "Trees": [ 0, 1, 2, 20, 21, 23, 24 ]
     }
   ],
-  "Day": 0,
-  "Nutrients": 20
+  "Day": 6,
+  "Nutrients": 19,
+  "Trees": {
+    "0": {
+      "Index": 0,
+      "Size": 0,
+      "IsDormant": "False",
+      "Owner": 2
+    },
+    "1": {
+      "Index": 1,
+      "Size": 1,
+      "IsDormant": "False",
+      "Owner": 2
+    },
+    "2": {
+      "Index": 2,
+      "Size": 1,
+      "IsDormant": "False",
+      "Owner": 2
+    },
+    "20": {
+      "Index": 20,
+      "Size": 2,
+      "IsDormant": "False",
+      "Owner": 2
+    },
+    "21": {
+      "Index": 21,
+      "Size": 0,
+      "IsDormant": "False",
+      "Owner": 2
+    },
+    "23": {
+      "Index": 23,
+      "Size": 1,
+      "IsDormant": "False",
+      "Owner": 2
+    },
+    "24": {
+      "Index": 24,
+      "Size": 0,
+      "IsDormant": "False",
+      "Owner": 2
+    },
+    "32": {
+      "Index": 32,
+      "Size": 2,
+      "IsDormant": "False",
+      "Owner": 1
+    }
+  }
 }

@@ -1,189 +1,187 @@
-{
-  "map": [
-    {
-      "Index": 0,
-      "Richness": 3,
-      "Neighbors": [ 1, 2, 3, 4, 5, 6 ]
-    },
-    {
-      "Index": 1,
-      "Richness": 3,
-      "Neighbors": [ 7, 8, 2, 0, 6, 18 ]
-    },
-    {
-      "Index": 2,
-      "Richness": 3,
-      "Neighbors": [ 8, 9, 10, 3, 0, 1 ]
-    },
-    {
-      "Index": 3,
-      "Richness": 3,
-      "Neighbors": [ 2, 10, 11, 12, 4, 0 ]
-    },
-    {
-      "Index": 4,
-      "Richness": 3,
-      "Neighbors": [ 0, 3, 12, 13, 14, 5 ]
-    },
-    {
-      "Index": 5,
-      "Richness": 3,
-      "Neighbors": [ 6, 0, 4, 14, 15, 16 ]
-    },
-    {
-      "Index": 6,
-      "Richness": 3,
-      "Neighbors": [ 18, 1, 0, 5, 16, 17 ]
-    },
-    {
-      "Index": 7,
-      "Richness": 2,
-      "Neighbors": [ 19, 20, 8, 1, 18, 36 ]
-    },
-    {
-      "Index": 8,
-      "Richness": 2,
-      "Neighbors": [ 20, 21, 9, 2, 1, 7 ]
-    },
-    {
-      "Index": 9,
-      "Richness": 2,
-      "Neighbors": [ 21, 22, 23, 10, 2, 8 ]
-    },
-    {
-      "Index": 10,
-      "Richness": 2,
-      "Neighbors": [ 9, 23, 24, 11, 3, 2 ]
-    },
-    {
-      "Index": 11,
-      "Richness": 2,
-      "Neighbors": [ 10, 24, 25, 26, 12, 3 ]
-    },
-    {
-      "Index": 12,
-      "Richness": 2,
-      "Neighbors": [ 3, 11, 26, 27, 13, 4 ]
-    },
-    {
-      "Index": 13,
-      "Richness": 2,
-      "Neighbors": [ 4, 12, 27, 28, 29, 14 ]
-    },
-    {
-      "Index": 14,
-      "Richness": 2,
-      "Neighbors": [ 5, 4, 13, 29, 30, 15 ]
-    },
-    {
-      "Index": 15,
-      "Richness": 2,
-      "Neighbors": [ 16, 5, 14, 30, 31, 32 ]
-    },
-    {
-      "Index": 16,
-      "Richness": 2,
-      "Neighbors": [ 17, 6, 5, 15, 32, 33 ]
-    },
-    {
-      "Index": 17,
-      "Richness": 2,
-      "Neighbors": [ 35, 18, 6, 16, 33, 34 ]
-    },
-    {
-      "Index": 18,
-      "Richness": 2,
-      "Neighbors": [ 36, 7, 1, 6, 17, 35 ]
-    },
-    {
-      "Index": 19,
-      "Richness": 1,
-      "Neighbors": [ -1, -1, 20, 7, 36, -1 ]
-    },
-    {
-      "Index": 20,
-      "Richness": 1,
-      "Neighbors": [ -1, -1, 21, 8, 7, 19 ]
-    },
-    {
-      "Index": 21,
-      "Richness": 1,
-      "Neighbors": [ -1, -1, 22, 9, 8, 20 ]
-    },
-    {
-      "Index": 22,
-      "Richness": 1,
-      "Neighbors": [ -1, -1, -1, 23, 9, 21 ]
-    },
-    {
-      "Index": 23,
-      "Richness": 1,
-      "Neighbors": [ 22, -1, -1, 24, 10, 9 ]
-    },
-    {
-      "Index": 24,
-      "Richness": 1,
-      "Neighbors": [ 23, -1, -1, 25, 11, 10 ]
-    },
-    {
-      "Index": 25,
-      "Richness": 1,
-      "Neighbors": [ 24, -1, -1, -1, 26, 11 ]
-    },
-    {
-      "Index": 26,
-      "Richness": 1,
-      "Neighbors": [ 11, 25, -1, -1, 27, 12 ]
-    },
-    {
-      "Index": 27,
-      "Richness": 1,
-      "Neighbors": [ 12, 26, -1, -1, 28, 13 ]
-    },
-    {
-      "Index": 28,
-      "Richness": 1,
-      "Neighbors": [ 13, 27, -1, -1, -1, 29 ]
-    },
-    {
-      "Index": 29,
-      "Richness": 1,
-      "Neighbors": [ 14, 13, 28, -1, -1, 30 ]
-    },
-    {
-      "Index": 30,
-      "Richness": 1,
-      "Neighbors": [ 15, 14, 29, -1, -1, 31 ]
-    },
-    {
-      "Index": 31,
-      "Richness": 1,
-      "Neighbors": [ 32, 15, 30, -1, -1, -1 ]
-    },
-    {
-      "Index": 32,
-      "Richness": 1,
-      "Neighbors": [ 33, 16, 15, 31, -1, -1 ]
-    },
-    {
-      "Index": 33,
-      "Richness": 1,
-      "Neighbors": [ 34, 17, 16, 32, -1, -1 ]
-    },
-    {
-      "Index": 34,
-      "Richness": 1,
-      "Neighbors": [ -1, 35, 17, 33, -1, -1 ]
-    },
-    {
-      "Index": 35,
-      "Richness": 1,
-      "Neighbors": [ -1, 36, 18, 17, 34, -1 ]
-    },
-    {
-      "Index": 36,
-      "Richness": 1,
-      "Neighbors": [ -1, 19, 7, 18, 35, -1 ]
-    }
-  ]
-}
+[
+  {
+    "Index": 0,
+    "Richness": 3,
+    "Neighbors": [ 1, 2, 3, 4, 5, 6 ]
+  },
+  {
+    "Index": 1,
+    "Richness": 3,
+    "Neighbors": [ 7, 8, 2, 0, 6, 18 ]
+  },
+  {
+    "Index": 2,
+    "Richness": 3,
+    "Neighbors": [ 8, 9, 10, 3, 0, 1 ]
+  },
+  {
+    "Index": 3,
+    "Richness": 3,
+    "Neighbors": [ 2, 10, 11, 12, 4, 0 ]
+  },
+  {
+    "Index": 4,
+    "Richness": 3,
+    "Neighbors": [ 0, 3, 12, 13, 14, 5 ]
+  },
+  {
+    "Index": 5,
+    "Richness": 3,
+    "Neighbors": [ 6, 0, 4, 14, 15, 16 ]
+  },
+  {
+    "Index": 6,
+    "Richness": 3,
+    "Neighbors": [ 18, 1, 0, 5, 16, 17 ]
+  },
+  {
+    "Index": 7,
+    "Richness": 2,
+    "Neighbors": [ 19, 20, 8, 1, 18, 36 ]
+  },
+  {
+    "Index": 8,
+    "Richness": 2,
+    "Neighbors": [ 20, 21, 9, 2, 1, 7 ]
+  },
+  {
+    "Index": 9,
+    "Richness": 2,
+    "Neighbors": [ 21, 22, 23, 10, 2, 8 ]
+  },
+  {
+    "Index": 10,
+    "Richness": 2,
+    "Neighbors": [ 9, 23, 24, 11, 3, 2 ]
+  },
+  {
+    "Index": 11,
+    "Richness": 2,
+    "Neighbors": [ 10, 24, 25, 26, 12, 3 ]
+  },
+  {
+    "Index": 12,
+    "Richness": 2,
+    "Neighbors": [ 3, 11, 26, 27, 13, 4 ]
+  },
+  {
+    "Index": 13,
+    "Richness": 2,
+    "Neighbors": [ 4, 12, 27, 28, 29, 14 ]
+  },
+  {
+    "Index": 14,
+    "Richness": 2,
+    "Neighbors": [ 5, 4, 13, 29, 30, 15 ]
+  },
+  {
+    "Index": 15,
+    "Richness": 2,
+    "Neighbors": [ 16, 5, 14, 30, 31, 32 ]
+  },
+  {
+    "Index": 16,
+    "Richness": 2,
+    "Neighbors": [ 17, 6, 5, 15, 32, 33 ]
+  },
+  {
+    "Index": 17,
+    "Richness": 2,
+    "Neighbors": [ 35, 18, 6, 16, 33, 34 ]
+  },
+  {
+    "Index": 18,
+    "Richness": 2,
+    "Neighbors": [ 36, 7, 1, 6, 17, 35 ]
+  },
+  {
+    "Index": 19,
+    "Richness": 1,
+    "Neighbors": [ -1, -1, 20, 7, 36, -1 ]
+  },
+  {
+    "Index": 20,
+    "Richness": 1,
+    "Neighbors": [ -1, -1, 21, 8, 7, 19 ]
+  },
+  {
+    "Index": 21,
+    "Richness": 1,
+    "Neighbors": [ -1, -1, 22, 9, 8, 20 ]
+  },
+  {
+    "Index": 22,
+    "Richness": 1,
+    "Neighbors": [ -1, -1, -1, 23, 9, 21 ]
+  },
+  {
+    "Index": 23,
+    "Richness": 1,
+    "Neighbors": [ 22, -1, -1, 24, 10, 9 ]
+  },
+  {
+    "Index": 24,
+    "Richness": 0,
+    "Neighbors": [ 23, -1, -1, 25, 11, 10 ]
+  },
+  {
+    "Index": 25,
+    "Richness": 1,
+    "Neighbors": [ 24, -1, -1, -1, 26, 11 ]
+  },
+  {
+    "Index": 26,
+    "Richness": 1,
+    "Neighbors": [ 11, 25, -1, -1, 27, 12 ]
+  },
+  {
+    "Index": 27,
+    "Richness": 0,
+    "Neighbors": [ 12, 26, -1, -1, 28, 13 ]
+  },
+  {
+    "Index": 28,
+    "Richness": 1,
+    "Neighbors": [ 13, 27, -1, -1, -1, 29 ]
+  },
+  {
+    "Index": 29,
+    "Richness": 1,
+    "Neighbors": [ 14, 13, 28, -1, -1, 30 ]
+  },
+  {
+    "Index": 30,
+    "Richness": 1,
+    "Neighbors": [ 15, 14, 29, -1, -1, 31 ]
+  },
+  {
+    "Index": 31,
+    "Richness": 1,
+    "Neighbors": [ 32, 15, 30, -1, -1, -1 ]
+  },
+  {
+    "Index": 32,
+    "Richness": 1,
+    "Neighbors": [ 33, 16, 15, 31, -1, -1 ]
+  },
+  {
+    "Index": 33,
+    "Richness": 0,
+    "Neighbors": [ 34, 17, 16, 32, -1, -1 ]
+  },
+  {
+    "Index": 34,
+    "Richness": 1,
+    "Neighbors": [ -1, 35, 17, 33, -1, -1 ]
+  },
+  {
+    "Index": 35,
+    "Richness": 1,
+    "Neighbors": [ -1, 36, 18, 17, 34, -1 ]
+  },
+  {
+    "Index": 36,
+    "Richness": 0,
+    "Neighbors": [ -1, 19, 7, 18, 35, -1 ]
+  }
+]

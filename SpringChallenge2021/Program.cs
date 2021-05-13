@@ -49,8 +49,7 @@ public static class Game
     public static void ReadMap()
     {
 #if DEBUG
-        dynamic data = JsonConvert.DeserializeObject<dynamic>(File.ReadAllText(".\\map.json"));
-        Map = data.map.ToObject<Cell[]>();
+        Map = JsonConvert.DeserializeObject<Cell[]>(File.ReadAllText(".\\map.json"));
 #else
         string[] inputs;
         int numberOfCells = int.Parse(Console.ReadLine()); // 37
@@ -152,6 +151,7 @@ public class State : ICloneable<State>
         string[] inputs;
         newState.Day = int.Parse(Console.ReadLine()); // the game lasts 24 days: 0-23
         newState.Nutrients = int.Parse(Console.ReadLine());
+        newState.Players[0] = new Player();
         for (int i = 0; i < 2; i++)
         {
             inputs = Console.ReadLine().Split(' ');
@@ -176,6 +176,7 @@ public class State : ICloneable<State>
                 Index = index,
                 Size = (TreeSize)int.Parse(inputs[1]),
                 IsDormant = inputs[3] != "0",
+                Owner = playerIndex
             };
             newState.Trees[index] = tree;
             newState.Players[playerIndex].Trees.Add(index);
@@ -443,7 +444,7 @@ public static class Extensions
     }
     public static string ToString<T>(this Dictionary<int,T> element)
     {
-        return $"{{{string.Join(",", element)}}}";
+        return $"{{{string.Join(",",element.Select(kv => $"'{kv.Key}':{kv.Value}"))}}}";
     }
     public static int[] DeepCopy(this int[] original)
     {

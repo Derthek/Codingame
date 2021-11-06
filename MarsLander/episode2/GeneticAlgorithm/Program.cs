@@ -16,7 +16,7 @@ namespace GeneticAlgorithm
         static void Main(string[] args)
         {
             Game.ReadMap();
-            Action action;
+            Action[] actions = null;
             State state = null;
             while (true)
             {
@@ -29,14 +29,11 @@ namespace GeneticAlgorithm
                 {
                     state = Game.State.Clone();
                 }
-
-                if (Game.State.Vy < -35)
+                if(actions == null)
                 {
-                    Game.State.Power++;
+                    actions = GeneticAlgorithm.Run(state);
                 }
-                action = new Action(0,Game.State.Power);
-                state = State.Update(state, ActionType.Simulate, action);
-                Game.Action = action;
+                Game.Action = actions[state.Turn];
                 Console.Error.WriteLine(Game.HasLanded(state));
                 State.Update(Game.State, ActionType.Send);
             }
@@ -60,7 +57,7 @@ namespace GeneticAlgorithm
         public static State State = new State();
         public static Action Action;
         public const bool DUMP = true;
-        
+        public static Random Random = new Random();
         public static void ReadMap()
         {
 #if DEBUG
@@ -132,7 +129,7 @@ namespace GeneticAlgorithm
     {
         public int Turn;
         public double prevX, prevY, X, Y, Vx, Vy;
-        public int Angle, Fuel, Power;
+        public double Angle, Fuel, Power;
         public double Ax => Helpers.SinDeg(Angle) * Power;
         public double Ay => (Helpers.CosDeg(Angle) * Power) + Game.gravity;
 
@@ -224,9 +221,9 @@ namespace GeneticAlgorithm
 
     public struct Action
     {
-        public int Angle;
-        public int Power;
-        public Action(int angle, int power)
+        public double Angle;
+        public double Power;
+        public Action(double angle, double power)
         {
             Angle = Helpers.ClampAngle(angle);
             Power = Helpers.ClampPower(power);
@@ -343,18 +340,161 @@ namespace GeneticAlgorithm
         {
             return Math.Sin(angle * Math.PI / 180);
         }
-        public static int ClampAngle(int angle)
+        public static double ClampAngle(double angle)
         {
             return Math.Max(Math.Min(angle, Game.maxRotation), Game.minRotation);
         }
-        public static int ClampPower(int power)
+        public static double ClampPower(double power)
         {
             return Math.Max(Math.Min(power, Game.maxPower), Game.minPower);
+        }
+        public static double ClampAngle(int angle)
+        {
+            return ClampAngle((double)angle);
+        }
+        public static double ClampPower(int power)
+        {
+            return ClampAngle((double)power);
         }
     }
 
     public interface ICloneable<T>
     {
         T Clone();
+    }
+
+    public static class GeneticAlgorithm
+    {
+        private static readonly int populationNumber = 40;
+        private static readonly int chromosomeNumber = 60;
+        private static readonly double[] validPowers = new double[]{ -1, 0, 1 };
+        private static readonly double[] validAngles = new double[]{ -15, 0, 15 };
+        private static readonly double mutationProbability = 0.01;
+        private static readonly double gradedRetainPercent = 0.3;
+        private static readonly double nonGradedRetainPercent = 0.2;
+
+        private static Individual[] CreatePopulation()
+        {
+            Individual[] population = new Individual[populationNumber];
+            double power, angle;
+            for(int i = 0; i < populationNumber; i++)
+            {
+                population[i] = new Individual();
+                for(int j = 0; j < chromosomeNumber; j++)
+                {
+                    power = validPowers[Game.Random.Next(validPowers.Length)];
+                    angle = validAngles[Game.Random.Next(validAngles.Length)];
+                    if (j > 0)
+                    {
+                        population[i].Genes[j] = new Action(population[i].Genes[j-1].Angle + angle, population[i].Genes[j - 1].Power + power);
+
+                    }
+                    else
+                    {
+                        population[i].Genes[j] = new Action(angle, power);
+                    }
+                }
+            }
+            return population;
+        }
+
+        private static Individual[] Generation(Individual[] population, State state)
+        {
+            Individual[] newPopulation = new Individual[populationNumber];
+            Individual[] select = Selection(population, state);
+            Individual child, parent1, parent2;
+            List<Individual> children = new List<Individual>();
+            while(children.Count < populationNumber - select.Length)
+            {
+                parent1 = select[Game.Random.Next(select.Length)];
+                parent2 = select[Game.Random.Next(select.Length)];
+
+                child = Crossover(parent1, parent2);
+                child = Mutation(child);
+                children.Add(child);
+            }
+            return select.Concat(children).ToArray();
+        }
+
+        private static Individual[] Selection(Individual[] population, State state)
+        {
+            State newState = state.Clone();
+            SortedList<double, Individual> individuals = new SortedList<double, Individual>();
+            foreach(Individual individual in population)
+            {
+                for(int i = 0; i < chromosomeNumber; i++)
+                {
+                    newState = State.Update(newState, ActionType.Simulate, individual.Genes[i]);
+                    Status status = Game.HasLanded(newState);
+                    double distanceToLandingZone = -(Math.Abs(Game.LandingZone.LeftX - newState.X) + Math.Abs(Game.LandingZone.LeftY - newState.Y));
+                    if (status == Status.Crashed)
+                    {
+                        individual.Score = distanceToLandingZone;
+                        break;
+                    }
+                    if (status == Status.LandBadAngle || status == Status.LandBadSpeed)
+                    {
+                        individual.Score = distanceToLandingZone + 2000;
+                        break;
+                    }
+                    if(status == Status.Landed)
+                    {
+                        individual.Score = 10000;
+                        break;
+                    }
+                }
+                individuals.Add(individual.Score, individual);
+            }
+            int topElementsLength = (int)(population.Length * gradedRetainPercent);
+            int restElementsLength = (int)(population.Length * nonGradedRetainPercent);
+
+            return individuals.Take(topElementsLength).Concat(individuals.Skip(topElementsLength).OrderBy(x => Game.Random.Next()).Take(restElementsLength)).Select(kv => kv.Value).ToArray();
+        }
+
+        private static Individual Crossover(Individual parent1, Individual parent2)
+        {
+            Individual child = new Individual();
+            for(int i = 0; i < chromosomeNumber; i++)
+            {
+                double crossoverCoef = Game.Random.NextDouble();
+                double power = crossoverCoef * parent1.Genes[i].Power + (1 - crossoverCoef) * parent2.Genes[i].Power;
+                double angle = crossoverCoef * parent1.Genes[i].Angle + (1 - crossoverCoef) * parent2.Genes[i].Angle;
+                child.Genes[i] = new Action(angle, power);
+            }
+            return child;
+        }
+
+        private static Individual Mutation(Individual individual)
+        {
+            double shouldMutate = Game.Random.NextDouble();
+            if(shouldMutate < mutationProbability)
+            {
+                int index = Game.Random.Next(individual.Genes.Length);
+                double power = validPowers[Game.Random.Next(validPowers.Length)];
+                double angle = validAngles[Game.Random.Next(validAngles.Length)];
+                individual.Genes[index] = new Action(individual.Genes[index].Angle + angle, individual.Genes[index].Power + power); ;
+            }
+            return individual;
+        }
+
+        public static Action[] Run(State state)
+        {
+            Action[] answer = null;
+            Individual[] population = CreatePopulation();
+            int genCount = 0;
+            while(answer == null)
+            {
+                population = Generation(population, state);
+                genCount++;
+            }
+
+            return answer;
+        }
+
+        private class Individual
+        {
+            public double Score;
+            public Action[] Genes = new Action[chromosomeNumber];
+        }
     }
 }

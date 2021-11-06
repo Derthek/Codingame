@@ -27,7 +27,7 @@ namespace GeneticAlgorithm
                 }
                 else
                 {
-                    state = Game.State;
+                    state = Game.State.Clone();
                 }
 
                 if (Game.State.Vy < -35)
@@ -128,7 +128,7 @@ namespace GeneticAlgorithm
 
     }
 
-    public class State
+    public class State : ICloneable<State>
     {
         public int Turn;
         public double prevX, prevY, X, Y, Vx, Vy;
@@ -140,6 +140,24 @@ namespace GeneticAlgorithm
         {
             return $"{{Turn:{Turn},prevX:{prevX},prevY:{prevY},X:{X},Y:{Y},Vx:{Vx},Vy:{Vy},Angle:{Angle},Fuel:{Fuel},Power:{Angle}}}";
         }
+
+        public State Clone()
+        {
+            return new State()
+            {
+                Turn = Turn,
+                prevX = prevX,
+                prevY = prevY,
+                X = X,
+                Y = Y,
+                Vx = Vx,
+                Vy = Vy,
+                Angle = Angle,
+                Fuel = Fuel,
+                Power = Power
+            };
+        }
+
         public static State Update(State state, ActionType type, Action? action = null)
         {
             switch (type)

@@ -418,14 +418,15 @@ namespace GeneticAlgorithm
 
         private static Individual[] Selection(Individual[] population, State state)
         {
-            State newState = state.Clone();
-            SortedList<double, Individual> individuals = new SortedList<double, Individual>();
+            SortedDictionary<double, Individual> individuals = new SortedDictionary<double, Individual>();
             foreach(Individual individual in population)
             {
+                State newState = state.Clone();
                 for(int i = 0; i < chromosomeNumber; i++)
                 {
                     newState = State.Update(newState, ActionType.Simulate, individual.Genes[i]);
                     Status status = Game.HasLanded(newState);
+                    // Negative because closer is better
                     double distanceToLandingZone = -(Math.Abs(Game.LandingZone.LeftX - newState.X) + Math.Abs(Game.LandingZone.LeftY - newState.Y));
                     if (status == Status.Crashed)
                     {
@@ -434,7 +435,10 @@ namespace GeneticAlgorithm
                     }
                     if (status == Status.LandBadAngle || status == Status.LandBadSpeed)
                     {
-                        individual.Score = distanceToLandingZone + 2000;
+                        double angleScore = newState.Angle == 0 ? 1000 : -Math.Abs(newState.Angle);
+                        double vxScore = Math.Abs(newState.Vx) < Game.maxFinalHorizontalV ? 1000 : -Math.Abs(newState.Vx);
+                        double vyScore = Math.Abs(newState.Vy) < Game.maxFinalVerticalV ? 1000: -Math.Abs(newState.Vy);
+                        individual.Score = 1000 + angleScore + vxScore + vyScore;
                         break;
                     }
                     if(status == Status.Landed)
@@ -443,7 +447,11 @@ namespace GeneticAlgorithm
                         break;
                     }
                 }
-                individuals.Add(individual.Score, individual);
+                // Negative because we want items with higher scores first
+                if (!individuals.ContainsKey(-individual.Score))
+                {
+                    individuals.Add(-individual.Score, individual);
+                }
             }
             int topElementsLength = (int)(population.Length * gradedRetainPercent);
             int restElementsLength = (int)(population.Length * nonGradedRetainPercent);
@@ -454,9 +462,9 @@ namespace GeneticAlgorithm
         private static Individual Crossover(Individual parent1, Individual parent2)
         {
             Individual child = new Individual();
+            double crossoverCoef = Game.Random.NextDouble();
             for(int i = 0; i < chromosomeNumber; i++)
             {
-                double crossoverCoef = Game.Random.NextDouble();
                 double power = crossoverCoef * parent1.Genes[i].Power + (1 - crossoverCoef) * parent2.Genes[i].Power;
                 double angle = crossoverCoef * parent1.Genes[i].Angle + (1 - crossoverCoef) * parent2.Genes[i].Angle;
                 child.Genes[i] = new Action(angle, power);
@@ -486,6 +494,15 @@ namespace GeneticAlgorithm
             {
                 population = Generation(population, state);
                 genCount++;
+                foreach(Individual ind in population)
+                {
+                    if(ind.Score == 10000)
+                    {
+                        answer = ind.Genes;
+                        break;
+                    }
+                }
+                Console.Error.WriteLine($"genCount: {genCount}, AvgScore: {population.Average(ind => ind.Score)}");
             }
 
             return answer;

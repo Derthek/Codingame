@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 #if DEBUG
 using Newtonsoft.Json;
 #endif
@@ -13,7 +14,7 @@ namespace GeneticAlgorithm
 
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             Game.ReadMap();
             Action[] actions = null;
@@ -21,7 +22,7 @@ namespace GeneticAlgorithm
             while (true)
             {
                 Game.ReadTurn();
-                if(Game.State.Turn > 0)
+                if (Game.State.Turn > 0)
                 {
                     Console.Error.WriteLine(state);
                 }
@@ -29,14 +30,16 @@ namespace GeneticAlgorithm
                 {
                     state = Game.State.Clone();
                 }
-                if(actions == null)
+                if (actions == null)
                 {
-                    actions = GeneticAlgorithm.Run(state);
+                    actions = await GeneticAlgorithm.Run(state);
+                    break;
                 }
                 Game.Action = actions[state.Turn];
                 Console.Error.WriteLine(Game.HasLanded(state));
                 State.Update(Game.State, ActionType.Send);
             }
+            Game.PopulationLog.Close();
         }
     }
 
@@ -58,6 +61,7 @@ namespace GeneticAlgorithm
         public static Action Action;
         public const bool DUMP = true;
         public static Random Random = new Random();
+        public static StreamWriter PopulationLog = File.AppendText($"populationLog-{DateTime.Now:yyyyMddTHHmmss}.txt");
         public static void ReadMap()
         {
 #if DEBUG
@@ -102,10 +106,10 @@ namespace GeneticAlgorithm
 
         public static Status HasLanded(State state)
         {
-            if(state.X < 0) return Status.Crashed;
-            if(state.X >= 7000) return Status.Crashed;
-            if(state.Y < 0) return Status.Crashed;
-            if(state.Y >= 3000) return Status.Crashed;
+            if (state.X < 0) return Status.Crashed;
+            if (state.X >= 7000) return Status.Crashed;
+            if (state.Y < 0) return Status.Crashed;
+            if (state.Y >= 3000) return Status.Crashed;
             if (LandingZone.IsColliding(state.prevX, state.prevY, state.X, state.Y))
             {
                 if (Math.Abs(state.Vx) > Game.maxFinalHorizontalV) return Status.LandBadSpeed;
@@ -113,9 +117,9 @@ namespace GeneticAlgorithm
                 if (Math.Abs(state.Angle) > Game.finalRotation) return Status.LandBadAngle;
                 return Status.Landed;
             }
-            for(int i = 0; i < surfaceN - 1; i++)
+            for (int i = 0; i < surfaceN - 1; i++)
             {
-                if(Land[i].IsColliding(state.prevX, state.prevY, state.X, state.Y))
+                if (Land[i].IsColliding(state.prevX, state.prevY, state.X, state.Y))
                 {
                     return Status.Crashed;
                 }
@@ -183,7 +187,7 @@ namespace GeneticAlgorithm
                 Power = int.Parse(inputs[6])
             };
             newState.Turn = state.Turn;
-            if(state.Turn == 0)
+            if (state.Turn == 0)
             {
                 newState.prevX = newState.X;
                 newState.prevY = newState.Y;
@@ -276,11 +280,12 @@ namespace GeneticAlgorithm
             double alpha = -(currentY - prevY) * (LeftX - prevX) + (currentX - prevX) * (LeftY - prevY);
             double beta = SlopeX * (LeftY - prevY) - SlopeY * (LeftX - prevX);
             if (denominator == 0) return false;
-            if(denominator > 0)
+            if (denominator > 0)
             {
                 if (alpha < 0 || alpha > denominator) return false;
                 if (beta < 0 || beta > denominator) return false;
-            }else
+            }
+            else
             {
                 if (alpha > 0 || alpha < denominator) return false;
                 if (beta > 0 || beta < denominator) return false;
@@ -367,26 +372,28 @@ namespace GeneticAlgorithm
     {
         private static readonly int populationNumber = 40;
         private static readonly int chromosomeNumber = 60;
-        private static readonly double[] validPowers = new double[]{ -1, 0, 1 };
-        private static readonly double[] validAngles = new double[]{ -15, 0, 15 };
+        private static readonly double[] validPowerDiffs = new double[] { -1, 0, 1 };
+        private static readonly double[] validAngleDiffs = new double[] { -15, 0, 15 };
+        private static readonly double[] validPowers = new double[] { 0, 1, 2, 3, 4 };
+        private static readonly double[] validAngles = new double[] { -90, -75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90 };
         private static readonly double mutationProbability = 0.01;
-        private static readonly double gradedRetainPercent = 0.3;
-        private static readonly double nonGradedRetainPercent = 0.2;
+        private static readonly double gradedRetainPercent = 0.2;
+        private static readonly double nonGradedRetainPercent = 0.3;
 
         private static Individual[] CreatePopulation()
         {
             Individual[] population = new Individual[populationNumber];
             double power, angle;
-            for(int i = 0; i < populationNumber; i++)
+            for (int i = 0; i < populationNumber; i++)
             {
                 population[i] = new Individual();
-                for(int j = 0; j < chromosomeNumber; j++)
+                for (int j = 0; j < chromosomeNumber; j++)
                 {
-                    power = validPowers[Game.Random.Next(validPowers.Length)];
-                    angle = validAngles[Game.Random.Next(validAngles.Length)];
+                    power = validPowerDiffs[Game.Random.Next(validPowerDiffs.Length)];
+                    angle = validAngleDiffs[Game.Random.Next(validAngleDiffs.Length)];
                     if (j > 0)
                     {
-                        population[i].Genes[j] = new Action(population[i].Genes[j-1].Angle + angle, population[i].Genes[j - 1].Power + power);
+                        population[i].Genes[j] = new Action(population[i].Genes[j - 1].Angle + angle, population[i].Genes[j - 1].Power + power);
 
                     }
                     else
@@ -398,56 +405,59 @@ namespace GeneticAlgorithm
             return population;
         }
 
-        private static Individual[] Generation(Individual[] population, State state)
+        private static async Task<Individual[]> Generation(Individual[] population, State state)
         {
             Individual[] newPopulation = new Individual[populationNumber];
-            Individual[] select = Selection(population, state);
-            Individual child, parent1, parent2;
+            Individual[] select = await Selection(population, state);
+            Individual parent1, parent2;
+            Individual[] childs;
             List<Individual> children = new List<Individual>();
-            while(children.Count < populationNumber - select.Length)
+            while (children.Count < populationNumber - select.Length)
             {
                 parent1 = select[Game.Random.Next(select.Length)];
                 parent2 = select[Game.Random.Next(select.Length)];
 
-                child = Crossover(parent1, parent2);
-                child = Mutation(child);
-                children.Add(child);
+                childs = Crossover(parent1, parent2);
+                children.Add(Mutation(childs[0]));
+                children.Add(Mutation(childs[1]));
             }
             return select.Concat(children).ToArray();
         }
 
-        private static Individual[] Selection(Individual[] population, State state)
+        private static async Task<Individual[]> Selection(Individual[] population, State state)
         {
             SortedDictionary<double, Individual> individuals = new SortedDictionary<double, Individual>();
-            foreach(Individual individual in population)
+            foreach (Individual individual in population)
             {
                 State newState = state.Clone();
-                for(int i = 0; i < chromosomeNumber; i++)
+                for (int i = 0; i < chromosomeNumber; i++)
                 {
                     newState = State.Update(newState, ActionType.Simulate, individual.Genes[i]);
+                    await Game.PopulationLog.WriteAsync($"{newState.X},{newState.Y};");
                     Status status = Game.HasLanded(newState);
                     // Negative because closer is better
-                    double distanceToLandingZone = -(Math.Abs(Game.LandingZone.LeftX - newState.X) + Math.Abs(Game.LandingZone.LeftY - newState.Y));
+                    double distanceToLandingZone = -(Math.Abs((Game.LandingZone.RightX - Game.LandingZone.LeftX) / 2 - newState.X) + Math.Abs(Game.LandingZone.LeftY - newState.Y));
                     if (status == Status.Crashed)
                     {
-                        individual.Score = distanceToLandingZone;
+                        individual.Score = -100000 + distanceToLandingZone;
                         break;
                     }
                     if (status == Status.LandBadAngle || status == Status.LandBadSpeed)
                     {
-                        double angleScore = newState.Angle == 0 ? 1000 : -Math.Abs(newState.Angle);
-                        double vxScore = Math.Abs(newState.Vx) < Game.maxFinalHorizontalV ? 1000 : -Math.Abs(newState.Vx);
-                        double vyScore = Math.Abs(newState.Vy) < Game.maxFinalVerticalV ? 1000: -Math.Abs(newState.Vy);
-                        individual.Score = 1000 + angleScore + vxScore + vyScore;
+                        double angleScore = newState.Angle == 0 ? 1000 : -Math.Abs(newState.Angle) * 100;
+                        double vxScore = Math.Abs(newState.Vx) <= Game.maxFinalHorizontalV ? 1000 : -Math.Log(Math.Abs(newState.Vx)- Game.maxFinalHorizontalV) * 100;
+                        double vyScore = Math.Abs(newState.Vy) <= Game.maxFinalVerticalV ? 1000 : -Math.Abs(newState.Vy) * 100;
+                        individual.Score = 5000 + angleScore + vxScore + vyScore;
                         break;
                     }
-                    if(status == Status.Landed)
+                    if (status == Status.Landed)
                     {
                         individual.Score = 10000;
                         break;
                     }
                 }
                 // Negative because we want items with higher scores first
+                await Game.PopulationLog.WriteAsync($"score,{individual.Score}" + Environment.NewLine);
                 if (!individuals.ContainsKey(-individual.Score))
                 {
                     individuals.Add(-individual.Score, individual);
@@ -459,23 +469,27 @@ namespace GeneticAlgorithm
             return individuals.Take(topElementsLength).Concat(individuals.Skip(topElementsLength).OrderBy(x => Game.Random.Next()).Take(restElementsLength)).Select(kv => kv.Value).ToArray();
         }
 
-        private static Individual Crossover(Individual parent1, Individual parent2)
+        private static Individual[] Crossover(Individual parent1, Individual parent2)
         {
-            Individual child = new Individual();
+            Individual child1 = new Individual();
+            Individual child2 = new Individual();
             double crossoverCoef = Game.Random.NextDouble();
-            for(int i = 0; i < chromosomeNumber; i++)
+            for (int i = 0; i < chromosomeNumber; i++)
             {
-                double power = crossoverCoef * parent1.Genes[i].Power + (1 - crossoverCoef) * parent2.Genes[i].Power;
-                double angle = crossoverCoef * parent1.Genes[i].Angle + (1 - crossoverCoef) * parent2.Genes[i].Angle;
-                child.Genes[i] = new Action(angle, power);
+                double power1 = crossoverCoef * parent1.Genes[i].Power + (1 - crossoverCoef) * parent2.Genes[i].Power;
+                double power2 = (1 - crossoverCoef) * parent1.Genes[i].Power + crossoverCoef * parent2.Genes[i].Power;
+                double angle1 = crossoverCoef * parent1.Genes[i].Angle + (1 - crossoverCoef) * parent2.Genes[i].Angle;
+                double angle2 = (1 - crossoverCoef) * parent1.Genes[i].Angle + crossoverCoef * parent2.Genes[i].Angle;
+                child1.Genes[i] = new Action(angle1, power1);
+                child2.Genes[i] = new Action(angle2, power2);
             }
-            return child;
+            return new Individual[] { child1, child2 };
         }
 
         private static Individual Mutation(Individual individual)
         {
             double shouldMutate = Game.Random.NextDouble();
-            if(shouldMutate < mutationProbability)
+            if (shouldMutate < mutationProbability)
             {
                 int index = Game.Random.Next(individual.Genes.Length);
                 double power = validPowers[Game.Random.Next(validPowers.Length)];
@@ -485,24 +499,26 @@ namespace GeneticAlgorithm
             return individual;
         }
 
-        public static Action[] Run(State state)
+        public static async Task<Action[]> Run(State state)
         {
             Action[] answer = null;
             Individual[] population = CreatePopulation();
             int genCount = 0;
-            while(answer == null)
+            while (answer == null && genCount < 10000)
             {
-                population = Generation(population, state);
+                population = await Generation(population, state);
                 genCount++;
-                foreach(Individual ind in population)
+                await Game.PopulationLog.WriteLineAsync($"gen,{genCount};score,{population.Average(ind => ind.Score)}");
+
+                foreach (Individual ind in population)
                 {
-                    if(ind.Score == 10000)
+                    if (ind.Score == 10000)
                     {
                         answer = ind.Genes;
                         break;
                     }
                 }
-                Console.Error.WriteLine($"genCount: {genCount}, AvgScore: {population.Average(ind => ind.Score)}");
+                Console.Error.WriteLine($"genCount: {genCount}, AvgScore: {population.Average(ind => ind.Score)}, MinScore: {population.Min(ind => ind.Score)}, MaxScore: {population.Max(ind => ind.Score)}");
             }
 
             return answer;

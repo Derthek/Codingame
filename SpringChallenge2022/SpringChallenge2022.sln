@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.810.21
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpringChallenge2022", "SpringChallenge2022.csproj", "{E70503EB-2BD2-4F88-A141-559C4A2B8942}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E70503EB-2BD2-4F88-A141-559C4A2B8942}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E70503EB-2BD2-4F88-A141-559C4A2B8942}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E70503EB-2BD2-4F88-A141-559C4A2B8942}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E70503EB-2BD2-4F88-A141-559C4A2B8942}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DCC2B6A0-988B-45FC-9E71-B7697BB8FDB0}
+	EndGlobalSection
+EndGlobal

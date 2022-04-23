@@ -222,15 +222,15 @@ public class Entity : ICloneable<Entity>
 
 public class Map
 {
-    public static int WIDTH = 17630;
-    public static int HEIGHT = 9000;
+    public static int WIDTH = 17631;
+    public static int HEIGHT = 9001;
     public static bool IsInMap(Coordinate position)
     {
         return (
-          position.X >= 0 &&
-          position.X <= WIDTH &&
-          position.Y >= 0 &&
-          position.Y <= HEIGHT
+          position.X > 0 &&
+          position.X < WIDTH &&
+          position.Y > 0 &&
+          position.Y < HEIGHT
         );
     }
     public static bool IsInMap(int position)

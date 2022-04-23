@@ -130,7 +130,7 @@ class Player
         Coordinate baseCoord = Map.IntegerToCoordinates(state.MyBase);
         Coordinate dir = coordinate - baseCoord;
         Coordinate goal = coordinate + dir;
-        string cmd = $"WIND {goal.X} {goal.Y}";
+        string cmd = $"SPELL WIND {goal.X} {goal.Y}";
         Console.Error.WriteLine(cmd);
         PendingCommands.Add(cmd);
         return state;

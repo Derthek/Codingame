@@ -29,7 +29,7 @@ class Player
             myHeros = state.Entities.Where((entity) => entity.Type == EntityType.MyHero);
             threatMonsters = state.Entities.Where((entity) => entity.Type == EntityType.Monster && entity.ThreatFor == Target.Me).OrderBy((entity) => Map.Distance(entity.Pos, state.MyBase));
             Console.Error.WriteLine(string.Join(",",threatMonsters));
-            for (int i = 0; i < heroesPerPlayer; i++)
+            foreach (Entity hero in myHeros)
             {
                 if (!threatMonsters.Any())
                 {
@@ -37,10 +37,19 @@ class Player
                 }
                 else
                 {
+                    Entity threat = threatMonsters.First();
+                    if (state.MyMana >= 10 && Map.Distance(threat.Pos,state.MyBase) <= 1000)
+                    {
+                        state = Wind(state, ACTIONS.WIND, new Parameters()
+                        {
+                            MyTurn = true,
+                            Pos = hero.Pos
+                        });
+                    }
                     state = Move(state, ACTIONS.MOVE, new Parameters()
                     {
                         MyTurn = true,
-                        Pos = threatMonsters.First().Pos
+                        Pos = threat.Pos
                     });
                 }
             }
@@ -92,7 +101,7 @@ class Player
                 ShieldLife = shieldLife,
                 IsControlled = isControlled,
                 Health = health,
-                Velocity = Map.CoordinatesToInteger(vx, vy),
+                Velocity = new Coordinate(vx, vy),
                 NearBase = (NearBase)nearBase,
                 ThreatFor = (Target)threatFor
             });
@@ -115,8 +124,15 @@ class Player
         PendingCommands.Add(cmd);
         return state; // TODO: Update state
     }
-    static State Spell(State state, ACTIONS action, Parameters parameters = null)
+    static State Wind(State state, ACTIONS action, Parameters parameters = null)
     {
+        Coordinate coordinate = Map.IntegerToCoordinates(parameters.Pos);
+        Coordinate baseCoord = Map.IntegerToCoordinates(state.MyBase);
+        Coordinate dir = coordinate - baseCoord;
+        Coordinate goal = coordinate + dir;
+        string cmd = $"WIND {goal.X} {goal.Y}";
+        Console.Error.WriteLine(cmd);
+        PendingCommands.Add(cmd);
         return state;
     }
     static State Send(State state, ACTIONS action, Parameters parameters = null)
@@ -139,8 +155,8 @@ class Player
                 return Move(state, action, parameters);
             //case ACTIONS.SIMULATE_MOVE:
             //    return SimulateMove(state, action, parameters);
-            case ACTIONS.SPELL:
-                return Spell(state, action, parameters);
+            case ACTIONS.WIND:
+                return Wind(state, action, parameters);
             case ACTIONS.SEND:
                 return Send(state, action, parameters);
             default:
@@ -194,9 +210,11 @@ public class Entity : ICloneable<Entity>
     public int ShieldLife { get; set; }
     public int IsControlled { get; set; }
     public int Health { get; set; }
-    public int Velocity { get; set; }
+    public Coordinate Velocity { get; set; }
     public NearBase NearBase { get; set; }
     public Target ThreatFor { get; set; }
+    public int Speed => Type == EntityType.Monster ? 400 : 800;
+    public static int Vision = 2200;
 
     public override string ToString()
     {
@@ -325,6 +343,10 @@ public class Coordinate : ICloneable<Coordinate>
     {
         return new Coordinate(coordinateA.X + coordinateB.X, coordinateA.Y + coordinateB.Y);
     }
+    public static Coordinate operator -(Coordinate coordinateA, Coordinate coordinateB)
+    {
+        return new Coordinate(coordinateA.X - coordinateB.X, coordinateA.Y - coordinateB.Y);
+    }
     public Coordinate Clone()
     {
         return new Coordinate(X, Y);
@@ -356,7 +378,7 @@ public enum ACTIONS
     READ_INPUT,
         MOVE,
         SIMULATE_MOVE,
-        SPELL,
+        WIND,
         SEND,
         WAIT,
     }

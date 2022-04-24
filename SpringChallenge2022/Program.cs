@@ -16,41 +16,82 @@ class Player
         int baseX = int.Parse(inputs[0]);
         int baseY = int.Parse(inputs[1]);
         int heroesPerPlayer = int.Parse(Console.ReadLine());
-        State state = new State()
-        {
-            MyBase = Map.CoordinatesToInteger(baseX, baseY)
-        };
-        IEnumerable<Entity> myHeros = new List<Entity>();
+        State state = new State();
+        Map.MyBase = Map.CoordinatesToInteger(baseX, baseY);
+        Map.OpponentBase = Map.CoordinatesToInteger(Map.WIDTH - 1 - baseX, Map.HEIGHT - 1 - baseY);
+        Map.GetCoverPoints();
+        List<Entity> myHeros = new List<Entity>();
+        List<Entity> monsters = new List<Entity>();
         IEnumerable<Entity> threatMonsters = new List<Entity>();
 
         while (true)
         {
             state = Update(state, ACTIONS.READ_INPUT);
-            myHeros = state.Entities.Where((entity) => entity.Type == EntityType.MyHero);
-            threatMonsters = state.Entities.Where((entity) => entity.Type == EntityType.Monster && entity.ThreatFor == Target.Me).OrderBy((entity) => Map.Distance(entity.Pos, state.MyBase));
-            Console.Error.WriteLine(string.Join(",",threatMonsters));
-            foreach (Entity hero in myHeros)
+            myHeros = state.Entities.Where((entity) => entity.Type == EntityType.MyHero).ToList();
+            monsters = state.Entities.Where((entity) => entity.Type == EntityType.Monster).ToList();
+            threatMonsters = monsters.Where((entity) => entity.ThreatFor == Target.Me).OrderBy((entity) => Map.Distance(entity.Pos, Map.MyBase));
+            Console.Error.WriteLine(string.Join(",", threatMonsters));
+            for (int i = 0; i < heroesPerPlayer; i++)
             {
                 if (!threatMonsters.Any())
                 {
-                    state = Wait(state, ACTIONS.WAIT);
+                    double distanceToCover = Map.Distance(myHeros[i].Pos, Map.CoverPoints[i]);
+                    Entity nearestMonster = monsters.OrderBy((entity) => Map.Distance(myHeros[i].Pos, entity.Pos)).FirstOrDefault();
+                    if (nearestMonster == null)
+                    {
+                        Console.Error.WriteLine("NO NEAREST" + i);
+                        // Cover space
+                        state = Move(state, ACTIONS.MOVE, new Parameters()
+                        {
+                            MyTurn = true,
+                            Pos = Map.CoverPoints[i]
+                        });
+                    }
+                    else
+                    {
+                        double distanceToNearestMonster = Map.Distance(myHeros[i].Pos, nearestMonster.Pos);
+                        Console.Error.WriteLine("distanceToNearestMonster " + distanceToNearestMonster);
+                        Console.Error.WriteLine("distanceToCover " + distanceToCover);
+                        if (distanceToCover > Game.HeroVision)
+                        {
+                            // Cover space
+                            state = Update(state, ACTIONS.MOVE, new Parameters()
+                            {
+                                MyTurn = true,
+                                Pos = Map.CoverPoints[i]
+                            });
+                        }
+                        else
+                        {
+                            state = Update(state, ACTIONS.MOVE, new Parameters()
+                            {
+                                MyTurn = true,
+                                Pos = nearestMonster.Pos
+                            });
+                        }
+                    }
                 }
                 else
                 {
                     Entity threat = threatMonsters.First();
-                    if (state.MyMana >= 10 && Map.Distance(threat.Pos,state.MyBase) <= 1000)
+                    Console.Error.WriteLine("threat " + threat.ToString());
+                    int safetyDistance = threatMonsters.Count() > 6 ? 2000 : 1000;
+                    if (state.MyMana >= Game.SpellCost && Map.Distance(threat.Pos, Map.MyBase) <= safetyDistance && Map.IsInRange(myHeros[i].Pos, threat.Pos, Game.WindRange))
                     {
-                        state = Wind(state, ACTIONS.WIND, new Parameters()
+                        state = Update(state, ACTIONS.WIND, new Parameters()
                         {
                             MyTurn = true,
-                            Pos = hero.Pos
+                            Pos = myHeros[i].Pos
                         });
                     }
-                    state = Move(state, ACTIONS.MOVE, new Parameters()
+                    else
                     {
-                        MyTurn = true,
-                        Pos = threat.Pos
-                    });
+                        state = Update(state, ACTIONS.MOVE, new Parameters()
+                        {
+                            MyTurn = true,
+                            Pos = threat.NextPos
+                        });
+                    }
                 }
             }
             state = Send(state, ACTIONS.SEND);
@@ -64,7 +105,7 @@ class Player
         {
             inputs = Console.ReadLine().Split(' ');
             int health = int.Parse(inputs[0]);
-            int mana = int.Parse(inputs[1]); 
+            int mana = int.Parse(inputs[1]);
             if (i == 0)
             {
                 newState.MyHealth = health;
@@ -91,8 +132,8 @@ class Player
             int health = int.Parse(inputs[6]);
             int vx = int.Parse(inputs[7]);
             int vy = int.Parse(inputs[8]);
-            int nearBase = int.Parse(inputs[9]); 
-            int threatFor = int.Parse(inputs[10]); 
+            int nearBase = int.Parse(inputs[9]);
+            int threatFor = int.Parse(inputs[10]);
             entities.Add(new Entity()
             {
                 Id = id,
@@ -127,17 +168,35 @@ class Player
     static State Wind(State state, ACTIONS action, Parameters parameters = null)
     {
         Coordinate coordinate = Map.IntegerToCoordinates(parameters.Pos);
-        Coordinate baseCoord = Map.IntegerToCoordinates(state.MyBase);
+        Coordinate baseCoord = Map.IntegerToCoordinates(Map.MyBase);
         Coordinate dir = coordinate - baseCoord;
         Coordinate goal = coordinate + dir;
         string cmd = $"SPELL WIND {goal.X} {goal.Y}";
         Console.Error.WriteLine(cmd);
         PendingCommands.Add(cmd);
+        state.MyMana -= Game.SpellCost;
+        return state;
+    }
+    static State Control(State state, ACTIONS action, Parameters parameters = null)
+    {
+        Coordinate coordinate = Map.IntegerToCoordinates(parameters.Pos);
+        string cmd = $"SPELL CONTROL {parameters.Id} {coordinate.X} {coordinate.Y}";
+        Console.Error.WriteLine(cmd);
+        PendingCommands.Add(cmd);
+        state.MyMana -= Game.SpellCost;
+        return state;
+    }
+    static State Shield(State state, ACTIONS action, Parameters parameters = null)
+    {
+        string cmd = $"SPELL SHIELD {parameters.Id}";
+        Console.Error.WriteLine(cmd);
+        PendingCommands.Add(cmd);
+        state.MyMana -= Game.SpellCost;
         return state;
     }
     static State Send(State state, ACTIONS action, Parameters parameters = null)
     {
-        foreach(string cmd in PendingCommands)
+        foreach (string cmd in PendingCommands)
         {
             Console.WriteLine(cmd);
         }
@@ -157,6 +216,10 @@ class Player
             //    return SimulateMove(state, action, parameters);
             case ACTIONS.WIND:
                 return Wind(state, action, parameters);
+            case ACTIONS.CONTROL:
+                return Control(state, action, parameters);
+            case ACTIONS.SHIELD:
+                return Shield(state, action, parameters);
             case ACTIONS.SEND:
                 return Send(state, action, parameters);
             default:
@@ -176,7 +239,6 @@ public class State : ICloneable<State>
 {
     public int Turn { get; set; }
 
-    public int MyBase { get; set; }
     public int MyHealth { get; set; }
     public int OpponentHealth { get; set; }
     public int MyMana { get; set; }
@@ -184,7 +246,7 @@ public class State : ICloneable<State>
     public List<Entity> Entities { get; set; } = new List<Entity>();
     public override string ToString()
     {
-        return $"Turn:{Turn},MyBase:{MyBase},MyHealth:{MyHealth},OpponentHealth:{OpponentHealth},MyMana:{MyMana},OpponentMana:{OpponentMana},Entities:[{string.Join(",", Entities.Select(p => "{" + p.ToString() + "}"))}]";
+        return $"Turn:{Turn},MyHealth:{MyHealth},OpponentHealth:{OpponentHealth},MyMana:{MyMana},OpponentMana:{OpponentMana},Entities:[{string.Join(",", Entities.Select(p => "{" + p.ToString() + "}"))}]";
     }
 
     public State Clone()
@@ -192,7 +254,6 @@ public class State : ICloneable<State>
         return new State()
         {
             Turn = Turn,
-            MyBase = MyBase,
             MyHealth = MyHealth,
             OpponentHealth = OpponentHealth,
             MyMana = MyMana,
@@ -214,7 +275,7 @@ public class Entity : ICloneable<Entity>
     public NearBase NearBase { get; set; }
     public Target ThreatFor { get; set; }
     public int Speed => Type == EntityType.Monster ? 400 : 800;
-    public static int Vision = 2200;
+    public int NextPos => Map.CoordinatesToInteger(Map.IntegerToCoordinates(Pos) + Velocity);
 
     public override string ToString()
     {
@@ -237,11 +298,44 @@ public class Entity : ICloneable<Entity>
         };
     }
 }
+public static class Game
+{
+    public const int BaseVision = 6000;
+    public const int HeroVision = 2200;
+    public const int SpellCost = 10;
+    public const int AttackRange = 800;
+    public const int AttackDamage = 2;
+    public const int MonsterBaseAttractRange = 5000;
+    public const int MonsterAttackRange = 300;
+    public const int WindRange = 1280;
+    public const int WindPush = 2200;
+    public const int ShieldRange = 2200;
+    public const int Control = 2200;
+    public const int MaxTurn = 220;
 
+}
 public class Map
 {
     public static int WIDTH = 17631;
     public static int HEIGHT = 9001;
+    public static int MyBase { get; set; }
+    public static int OpponentBase { get; set; }
+    public static bool IsTopBase => MyBase == 0;
+    private Coordinate SymmetryOrigin = new Coordinate((WIDTH - 1) / 2, (HEIGHT - 1) / 2);
+    private const int coverDistance = Game.BaseVision + Game.HeroVision / 2;
+    private const double coverAngle = 22.5 * Math.PI / 180;
+    public static int[] CoverPoints = new int[3];
+    public static void GetCoverPoints()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            int x = (int)(coverDistance * Math.Cos((i + 1) * coverAngle));
+            int y = (int)(coverDistance * Math.Sin((i + 1) * coverAngle));
+            Coordinate myBase = IntegerToCoordinates(MyBase);
+            int sign = IsTopBase ? 1 : -1;
+            CoverPoints[i] = CoordinatesToInteger(new Coordinate(myBase.X + sign * x, myBase.Y + sign * y));
+        }
+    }
     public static bool IsInMap(Coordinate position)
     {
         return (
@@ -255,27 +349,28 @@ public class Map
     {
         return IsInMap(IntegerToCoordinates(position));
     }
+    public static bool IsInRange(int center, int target, int range) => Distance(center, target) < range;
     public static int CoordinatesToInteger(int x, int y)
     {
         return y * WIDTH + x;
     }
-
-    public static Coordinate IntegerToCoordinates(int integer)
-    {
-        return new Coordinate(integer % WIDTH, integer / WIDTH);
-    }
-
     public static int CoordinatesToInteger(Coordinate coordinate)
     {
         return CoordinatesToInteger(coordinate.X, coordinate.Y);
     }
-    public static int Distance(int a, int b)
+    public static Coordinate IntegerToCoordinates(int integer)
+    {
+        return new Coordinate(integer % WIDTH, integer / WIDTH);
+    }
+    public static double Distance(int a, int b)
     {
         return Distance(Map.IntegerToCoordinates(a), Map.IntegerToCoordinates(b));
     }
-    public static int Distance(Coordinate a, Coordinate b)
+    public static double Distance(Coordinate a, Coordinate b)
     {
-        return Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
+        int dx = a.X - b.X;
+        int dy = a.Y - b.Y;
+        return Math.Sqrt(dx * dx + dy * dy);
     }
 }
 
@@ -376,12 +471,14 @@ public enum Target
 public enum ACTIONS
 {
     READ_INPUT,
-        MOVE,
-        SIMULATE_MOVE,
-        WIND,
-        SEND,
-        WAIT,
-    }
+    MOVE,
+    SIMULATE_MOVE,
+    WIND,
+    CONTROL,
+    SHIELD,
+    SEND,
+    WAIT,
+}
 
 public interface ICloneable<T>
 {

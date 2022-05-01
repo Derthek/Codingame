@@ -20,79 +20,29 @@ class Player
         Map.MyBase = Map.CoordinatesToInteger(baseX, baseY);
         Map.OpponentBase = Map.CoordinatesToInteger(Map.WIDTH - 1 - baseX, Map.HEIGHT - 1 - baseY);
         Map.GetCoverPoints();
-        List<Entity> myHeros = new List<Entity>();
-        List<Entity> monsters = new List<Entity>();
         IEnumerable<Entity> threatMonsters = new List<Entity>();
 
         while (true)
         {
             state = Update(state, ACTIONS.READ_INPUT);
-            myHeros = state.Entities.Where((entity) => entity.Type == EntityType.MyHero).ToList();
-            monsters = state.Entities.Where((entity) => entity.Type == EntityType.Monster).ToList();
-            threatMonsters = monsters.Where((entity) => entity.ThreatFor == Target.Me).OrderBy((entity) => Map.Distance(entity.Pos, Map.MyBase));
-            Console.Error.WriteLine(string.Join(",", threatMonsters));
+            threatMonsters = state.Monsters.Where((entity) => entity.ThreatFor == Target.Me).OrderBy((entity) => Map.Distance(entity.Pos, Map.MyBase));
+            int closestHeroToThreat = 0;
+            if (threatMonsters.Any())
+            {
+                Entity closestThreat = threatMonsters.First();
+                closestHeroToThreat = state.MyHeros.OrderBy(hero => Map.Distance(hero.Pos, closestThreat.Pos)).First().Id;
+            }
             for (int i = 0; i < heroesPerPlayer; i++)
             {
-                if (!threatMonsters.Any())
+                if (threatMonsters.Any() && state.MyHeros[i].Id == closestHeroToThreat)
                 {
-                    double distanceToCover = Map.Distance(myHeros[i].Pos, Map.CoverPoints[i]);
-                    Entity nearestMonster = monsters.OrderBy((entity) => Map.Distance(myHeros[i].Pos, entity.Pos)).FirstOrDefault();
-                    if (nearestMonster == null)
-                    {
-                        Console.Error.WriteLine("NO NEAREST" + i);
-                        // Cover space
-                        state = Move(state, ACTIONS.MOVE, new Parameters()
-                        {
-                            MyTurn = true,
-                            Pos = Map.CoverPoints[i]
-                        });
-                    }
-                    else
-                    {
-                        double distanceToNearestMonster = Map.Distance(myHeros[i].Pos, nearestMonster.Pos);
-                        Console.Error.WriteLine("distanceToNearestMonster " + distanceToNearestMonster);
-                        Console.Error.WriteLine("distanceToCover " + distanceToCover);
-                        if (distanceToCover > Game.HeroVision)
-                        {
-                            // Cover space
-                            state = Update(state, ACTIONS.MOVE, new Parameters()
-                            {
-                                MyTurn = true,
-                                Pos = Map.CoverPoints[i]
-                            });
-                        }
-                        else
-                        {
-                            state = Update(state, ACTIONS.MOVE, new Parameters()
-                            {
-                                MyTurn = true,
-                                Pos = nearestMonster.Pos
-                            });
-                        }
-                    }
+                    state.MyHeros[i].state = new DefendState(i, threatMonsters);
                 }
                 else
                 {
-                    Entity threat = threatMonsters.First();
-                    Console.Error.WriteLine("threat " + threat.ToString());
-                    int safetyDistance = threatMonsters.Count() > 6 ? 2000 : 1000;
-                    if (state.MyMana >= Game.SpellCost && Map.Distance(threat.Pos, Map.MyBase) <= safetyDistance && Map.IsInRange(myHeros[i].Pos, threat.Pos, Game.WindRange))
-                    {
-                        state = Update(state, ACTIONS.WIND, new Parameters()
-                        {
-                            MyTurn = true,
-                            Pos = myHeros[i].Pos
-                        });
-                    }
-                    else
-                    {
-                        state = Update(state, ACTIONS.MOVE, new Parameters()
-                        {
-                            MyTurn = true,
-                            Pos = threat.NextPos
-                        });
-                    }
+                    state.MyHeros[i].state = new CoverState(i);
                 }
+                state = state.MyHeros[i].state.Act(state);
             }
             state = Send(state, ACTIONS.SEND);
         }
@@ -144,35 +94,31 @@ class Player
                 Health = health,
                 Velocity = new Coordinate(vx, vy),
                 NearBase = (NearBase)nearBase,
-                ThreatFor = (Target)threatFor
+                ThreatFor = (Target)threatFor,
             });
         }
-        newState.Entities = entities;
+        newState.MyHeros = entities.Where(entity => entity.Type == EntityType.MyHero).ToList();
+        newState.Monsters = entities.Where(entity => entity.Type == EntityType.Monster).ToList();
+        newState.OpponentHeroes = entities.Where(entity => entity.Type == EntityType.OpponentHero).ToList();
         return newState;
     }
     static State Wait(State state, ACTIONS action, Parameters parameters = null)
     {
         string cmd = $"WAIT";
-        Console.Error.WriteLine(cmd);
         PendingCommands.Add(cmd);
-        return state; // TODO: Update state
+        return state;
     }
     static State Move(State state, ACTIONS action, Parameters parameters = null)
     {
         Coordinate coordinate = Map.IntegerToCoordinates(parameters.Pos);
         string cmd = $"MOVE {coordinate.X} {coordinate.Y}";
-        Console.Error.WriteLine(cmd);
         PendingCommands.Add(cmd);
-        return state; // TODO: Update state
+        return state;
     }
     static State Wind(State state, ACTIONS action, Parameters parameters = null)
     {
-        Coordinate coordinate = Map.IntegerToCoordinates(parameters.Pos);
-        Coordinate baseCoord = Map.IntegerToCoordinates(Map.MyBase);
-        Coordinate dir = coordinate - baseCoord;
-        Coordinate goal = coordinate + dir;
-        string cmd = $"SPELL WIND {goal.X} {goal.Y}";
-        Console.Error.WriteLine(cmd);
+        Coordinate baseCoord = Map.IntegerToCoordinates(Map.OpponentBase);
+        string cmd = $"SPELL WIND {baseCoord.X} {baseCoord.Y}";
         PendingCommands.Add(cmd);
         state.MyMana -= Game.SpellCost;
         return state;
@@ -181,7 +127,6 @@ class Player
     {
         Coordinate coordinate = Map.IntegerToCoordinates(parameters.Pos);
         string cmd = $"SPELL CONTROL {parameters.Id} {coordinate.X} {coordinate.Y}";
-        Console.Error.WriteLine(cmd);
         PendingCommands.Add(cmd);
         state.MyMana -= Game.SpellCost;
         return state;
@@ -189,7 +134,6 @@ class Player
     static State Shield(State state, ACTIONS action, Parameters parameters = null)
     {
         string cmd = $"SPELL SHIELD {parameters.Id}";
-        Console.Error.WriteLine(cmd);
         PendingCommands.Add(cmd);
         state.MyMana -= Game.SpellCost;
         return state;
@@ -204,7 +148,7 @@ class Player
         state.Turn++;
         return state;
     }
-    static State Update(State state, ACTIONS action, Parameters parameters = null)
+    public static State Update(State state, ACTIONS action, Parameters parameters = null)
     {
         switch (action)
         {
@@ -243,10 +187,12 @@ public class State : ICloneable<State>
     public int OpponentHealth { get; set; }
     public int MyMana { get; set; }
     public int OpponentMana { get; set; }
-    public List<Entity> Entities { get; set; } = new List<Entity>();
+    public List<Entity> MyHeros { get; set; } = new List<Entity>();
+    public List<Entity> Monsters { get; set; } = new List<Entity>();
+    public List<Entity> OpponentHeroes { get; set; } = new List<Entity>();
     public override string ToString()
     {
-        return $"Turn:{Turn},MyHealth:{MyHealth},OpponentHealth:{OpponentHealth},MyMana:{MyMana},OpponentMana:{OpponentMana},Entities:[{string.Join(",", Entities.Select(p => "{" + p.ToString() + "}"))}]";
+        return $"Turn:{Turn},MyHealth:{MyHealth},OpponentHealth:{OpponentHealth},MyMana:{MyMana},OpponentMana:{OpponentMana},MyHeros:[{string.Join(",", MyHeros.Select(p => "{" + p.ToString() + "}"))}],Monsters:[{string.Join(",", Monsters.Select(p => "{" + p.ToString() + "}"))}],OpponentHeroes:[{string.Join(",", OpponentHeroes.Select(p => "{" + p.ToString() + "}"))}]";
     }
 
     public State Clone()
@@ -258,8 +204,90 @@ public class State : ICloneable<State>
             OpponentHealth = OpponentHealth,
             MyMana = MyMana,
             OpponentMana = OpponentMana,
-            Entities = Entities.ConvertAll(p => p.Clone()),
+            MyHeros = MyHeros.ConvertAll(p => p.Clone()),
+            Monsters = Monsters.ConvertAll(p => p.Clone()),
+            OpponentHeroes = OpponentHeroes.ConvertAll(p => p.Clone()),
         };
+    }
+}
+
+public interface HeroState
+{
+    public State Act(State state);
+}
+public class CoverState : HeroState
+{
+    private readonly int Id;
+    private const int MoveRange = 3000;
+    public CoverState(int id)
+    {
+        Id = id;
+    }
+    public State Act(State state)
+    {
+        IEnumerable<Entity> monstersInRange = state.Monsters.Where(entity => Map.Distance(state.MyHeros[Id].Pos, entity.Pos) < MoveRange).OrderBy(entity => Map.Distance(state.MyHeros[Id].Pos, entity.Pos));
+        if (monstersInRange.Any() && Map.Distance(state.MyHeros[Id].Pos, Map.CoverPoints[Id]) <= MoveRange)
+        {
+            state = MoveToMonster(state, monstersInRange.First());
+        }
+        else
+        {
+            state = MoveToCover(state);
+        }
+        return state;
+    }
+    private State MoveToCover(State state)
+    {
+
+        state = Player.Update(state, ACTIONS.MOVE, new Parameters()
+        {
+            MyTurn = true,
+            Pos = Map.CoverPoints[Id]
+        });
+        return state;
+    }
+    private State MoveToMonster(State state, Entity monster)
+    {
+        state = Player.Update(state, ACTIONS.MOVE, new Parameters()
+        {
+            MyTurn = true,
+            Pos = monster.Pos
+        });
+        return state;
+    }
+}
+
+public class DefendState : HeroState
+{
+    private readonly int Id;
+    private readonly IEnumerable<Entity> Threats;
+    public DefendState(int id, IEnumerable<Entity> threats)
+    {
+        Id = id;
+        Threats = threats;
+    }
+    public State Act(State state)
+    {
+        Entity nearestThreat = Threats.First();
+        int enemiesInWindRange = Threats.Where(entity => Map.IsInRange(state.MyHeros[Id].Pos, entity.Pos, Game.WindRange)).Count();
+        int safetyDistance = enemiesInWindRange > 6 ? 4000 : 2000;
+        if (state.MyMana >= Game.SpellCost && Map.Distance(nearestThreat.Pos, Map.MyBase) <= safetyDistance && Map.IsInRange(state.MyHeros[Id].Pos, nearestThreat.Pos, Game.WindRange))
+        {
+            state = Player.Update(state, ACTIONS.WIND, new Parameters()
+            {
+                MyTurn = true,
+                Pos = state.MyHeros[Id].Pos
+            });
+        }
+        else
+        {
+            state = Player.Update(state, ACTIONS.MOVE, new Parameters()
+            {
+                MyTurn = true,
+                Pos = nearestThreat.NextPos
+            });
+        }
+        return state;
     }
 }
 
@@ -276,6 +304,7 @@ public class Entity : ICloneable<Entity>
     public Target ThreatFor { get; set; }
     public int Speed => Type == EntityType.Monster ? 400 : 800;
     public int NextPos => Map.CoordinatesToInteger(Map.IntegerToCoordinates(Pos) + Velocity);
+    public HeroState state { get; set; }
 
     public override string ToString()
     {

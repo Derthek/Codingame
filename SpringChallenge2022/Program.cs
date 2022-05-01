@@ -21,26 +21,32 @@ class Player
         Map.OpponentBase = Map.CoordinatesToInteger(Map.WIDTH - 1 - baseX, Map.HEIGHT - 1 - baseY);
         Map.GetCoverPoints();
         IEnumerable<Entity> threatMonsters = new List<Entity>();
-
+        int[] defenseHeroes = new int[2] { -1, -1 };
         while (true)
         {
             state = Update(state, ACTIONS.READ_INPUT);
             threatMonsters = state.Monsters.Where((entity) => entity.ThreatFor == Target.Me).OrderBy((entity) => Map.Distance(entity.Pos, Map.MyBase));
-            int closestHeroToThreat = 0;
+            bool beingAttacked = threatMonsters.Any(entity => entity.isShielded);
             if (threatMonsters.Any())
             {
                 Entity closestThreat = threatMonsters.First();
-                closestHeroToThreat = state.MyHeros.OrderBy(hero => Map.Distance(hero.Pos, closestThreat.Pos)).First().Id;
+                defenseHeroes[0] = state.MyHeros.OrderBy(hero => Map.Distance(hero.Pos, closestThreat.Pos)).First().Id;
+                if (beingAttacked)
+                {
+                    defenseHeroes[1] = state.MyHeros.OrderBy(hero => Map.Distance(hero.Pos, Map.MyBase)).First(hero => hero.Id != defenseHeroes[0]).Id;
+                }
             }
             for (int i = 0; i < heroesPerPlayer; i++)
             {
-                if (threatMonsters.Any() && state.MyHeros[i].Id == closestHeroToThreat)
+                if (threatMonsters.Any() && state.MyHeros[i].Id.In(defenseHeroes))
                 {
                     state.MyHeros[i].state = new DefendState(i, threatMonsters);
+                    Console.Error.WriteLine($"DEFENSE:{i}");
                 }
                 else
                 {
                     state.MyHeros[i].state = new CoverState(i);
+                    Console.Error.WriteLine($"COVER:{i}");
                 }
                 state = state.MyHeros[i].state.Act(state);
             }
@@ -111,7 +117,8 @@ class Player
     static State Move(State state, ACTIONS action, Parameters parameters = null)
     {
         Coordinate coordinate = Map.IntegerToCoordinates(parameters.Pos);
-        string cmd = $"MOVE {coordinate.X} {coordinate.Y}";
+        string cmd = $"MOVE {coordinate.X} {coordinate.Y} {parameters.Id}";
+        Console.Error.WriteLine(cmd);
         PendingCommands.Add(cmd);
         return state;
     }
@@ -119,6 +126,7 @@ class Player
     {
         Coordinate baseCoord = Map.IntegerToCoordinates(Map.OpponentBase);
         string cmd = $"SPELL WIND {baseCoord.X} {baseCoord.Y}";
+        Console.Error.WriteLine(cmd);
         PendingCommands.Add(cmd);
         state.MyMana -= Game.SpellCost;
         return state;
@@ -135,6 +143,7 @@ class Player
     {
         string cmd = $"SPELL SHIELD {parameters.Id}";
         PendingCommands.Add(cmd);
+        Console.Error.WriteLine(cmd);
         state.MyMana -= Game.SpellCost;
         return state;
     }
@@ -242,7 +251,8 @@ public class CoverState : HeroState
         state = Player.Update(state, ACTIONS.MOVE, new Parameters()
         {
             MyTurn = true,
-            Pos = Map.CoverPoints[Id]
+            Pos = Map.CoverPoints[Id],
+            Id = Id
         });
         return state;
     }
@@ -251,7 +261,8 @@ public class CoverState : HeroState
         state = Player.Update(state, ACTIONS.MOVE, new Parameters()
         {
             MyTurn = true,
-            Pos = monster.Pos
+            Pos = monster.Pos,
+            Id = Id
         });
         return state;
     }
@@ -269,9 +280,18 @@ public class DefendState : HeroState
     public State Act(State state)
     {
         Entity nearestThreat = Threats.First();
-        int enemiesInWindRange = Threats.Where(entity => Map.IsInRange(state.MyHeros[Id].Pos, entity.Pos, Game.WindRange)).Count();
-        int safetyDistance = enemiesInWindRange > 6 ? 4000 : 2000;
-        if (state.MyMana >= Game.SpellCost && Map.Distance(nearestThreat.Pos, Map.MyBase) <= safetyDistance && Map.IsInRange(state.MyHeros[Id].Pos, nearestThreat.Pos, Game.WindRange))
+        IEnumerable<Entity> enemiesInWindRange = Threats.Where(entity => Map.IsInRange(state.MyHeros[Id].Pos, entity.Pos, Game.WindRange) && !entity.isShielded);
+        int safetyDistance = enemiesInWindRange.Count() > 6 ? 4000 : 2000;
+
+        if (state.MyMana >= Game.SpellCost && !state.MyHeros[Id].isShielded && (state.OpponentHeroes.Any(opp => Map.IsInRange(opp.Pos, state.MyHeros[Id].Pos, Game.ControlRange)) || state.OpponentHeroes.Any(opp => Map.IsInRange(opp.Pos, Map.MyBase, Game.ControlRange))))
+        {
+            state = Player.Update(state, ACTIONS.SHIELD, new Parameters()
+            {
+                MyTurn = true,
+                Id = state.MyHeros[Id].Id
+            });
+        }
+        else if (state.MyMana >= Game.SpellCost && enemiesInWindRange.Count() > 0 && Map.Distance(enemiesInWindRange.First().Pos, Map.MyBase) <= safetyDistance)
         {
             state = Player.Update(state, ACTIONS.WIND, new Parameters()
             {
@@ -284,7 +304,8 @@ public class DefendState : HeroState
             state = Player.Update(state, ACTIONS.MOVE, new Parameters()
             {
                 MyTurn = true,
-                Pos = nearestThreat.NextPos
+                Pos = nearestThreat.NextPos,
+                Id = Id
             });
         }
         return state;
@@ -304,6 +325,7 @@ public class Entity : ICloneable<Entity>
     public Target ThreatFor { get; set; }
     public int Speed => Type == EntityType.Monster ? 400 : 800;
     public int NextPos => Map.CoordinatesToInteger(Map.IntegerToCoordinates(Pos) + Velocity);
+    public bool isShielded => ShieldLife > 0;
     public HeroState state { get; set; }
 
     public override string ToString()
@@ -339,7 +361,7 @@ public static class Game
     public const int WindRange = 1280;
     public const int WindPush = 2200;
     public const int ShieldRange = 2200;
-    public const int Control = 2200;
+    public const int ControlRange = 2200;
     public const int MaxTurn = 220;
 
 }
@@ -512,4 +534,46 @@ public enum ACTIONS
 public interface ICloneable<T>
 {
     T Clone();
+}
+
+public static class Extensions
+{
+    public static string ToString<T>(this T[] element)
+    {
+        return $"[{string.Join(",", element)}]";
+    }
+    public static string ToString<T>(this List<T> element)
+    {
+        return $"[{string.Join(",", element)}]";
+    }
+    public static string ToString<T>(this IEnumerable<T> element)
+    {
+        return $"[{string.Join(",", element)}]";
+    }
+    public static string ToString<T>(this Dictionary<int, T> element)
+    {
+        return $"{{{string.Join(",", element.Select(kv => $"'{kv.Key}':{kv.Value}"))}}}";
+    }
+    public static int[] DeepCopy(this int[] original)
+    {
+        return original.Select(elem => elem).ToArray();
+    }
+
+    public static T[] Clone<T>(this T[] original) where T : class, ICloneable<T>
+    {
+        return original.Select(elem => elem?.Clone()).ToArray();
+    }
+    public static Dictionary<int, T> Clone<T>(this Dictionary<int, T> original) where T : class, ICloneable<T>
+    {
+        return new Dictionary<int, T>(original.Select(kv => new KeyValuePair<int, T>(kv.Key, kv.Value.Clone())));
+    }
+    public static List<T> Clone<T>(this List<T> original) where T : class, ICloneable<T>
+    {
+        return original.Select(elem => elem?.Clone()).ToList();
+    }
+
+    public static bool In<T>(this T elem, params T[] args)
+    {
+        return args.Contains(elem);
+    }
 }

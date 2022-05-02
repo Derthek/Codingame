@@ -8,6 +8,8 @@ using System.Collections.Generic;
 class Player
 {
     static List<string> PendingCommands = new List<string>();
+    static bool HasBeenAttacked = false;
+    public static int MonstersControlled = 0;
     static void Main(string[] args)
     {
 
@@ -19,21 +21,23 @@ class Player
         State state = new State();
         Map.MyBase = Map.CoordinatesToInteger(baseX, baseY);
         Map.OpponentBase = Map.CoordinatesToInteger(Map.WIDTH - 1 - baseX, Map.HEIGHT - 1 - baseY);
-        Map.GetCoverPoints();
+        Map.GetKeyPoints();
         IEnumerable<Entity> threatMonsters = new List<Entity>();
         int[] defenseHeroes = new int[2] { -1, -1 };
+        int attackHero = -1;
         while (true)
         {
             state = Update(state, ACTIONS.READ_INPUT);
             threatMonsters = state.Monsters.Where((entity) => entity.ThreatFor == Target.Me).OrderBy((entity) => Map.Distance(entity.Pos, Map.MyBase));
-            bool beingAttacked = threatMonsters.Any(entity => entity.isShielded);
+            HasBeenAttacked = HasBeenAttacked || (threatMonsters.Any(entity => entity.isShielded) && state.Turn >= Game.MinTurnToAttack);
             if (threatMonsters.Any())
             {
                 Entity closestThreat = threatMonsters.First();
                 defenseHeroes[0] = state.MyHeros.OrderBy(hero => Map.Distance(hero.Pos, closestThreat.Pos)).First().Id;
-                if (beingAttacked)
+                if (HasBeenAttacked)
                 {
                     defenseHeroes[1] = state.MyHeros.OrderBy(hero => Map.Distance(hero.Pos, Map.MyBase)).First(hero => hero.Id != defenseHeroes[0]).Id;
+                    attackHero = state.MyHeros.First(hero => !hero.Id.In(defenseHeroes)).Id;
                 }
             }
             for (int i = 0; i < heroesPerPlayer; i++)
@@ -42,6 +46,11 @@ class Player
                 {
                     state.MyHeros[i].state = new DefendState(i, threatMonsters);
                     Console.Error.WriteLine($"DEFENSE:{i}");
+                }
+                else if (state.MyHeros[i].Id == attackHero)
+                {
+                    state.MyHeros[i].state = new AttackState(i);
+                    Console.Error.WriteLine($"ATTACK:{i}");
                 }
                 else
                 {
@@ -76,6 +85,7 @@ class Player
         }
         int entityCount = int.Parse(Console.ReadLine());
         List<Entity> entities = new List<Entity>();
+        Entity entity;
         for (int i = 0; i < entityCount; i++)
         {
             inputs = Console.ReadLine().Split(' ');
@@ -90,18 +100,31 @@ class Player
             int vy = int.Parse(inputs[8]);
             int nearBase = int.Parse(inputs[9]);
             int threatFor = int.Parse(inputs[10]);
-            entities.Add(new Entity()
+            entity = new Entity()
             {
                 Id = id,
                 Type = (EntityType)type,
                 Pos = Map.CoordinatesToInteger(x, y),
                 ShieldLife = shieldLife,
-                IsControlled = isControlled,
+                IsControlled = isControlled == 1,
                 Health = health,
                 Velocity = new Coordinate(vx, vy),
                 NearBase = (NearBase)nearBase,
                 ThreatFor = (Target)threatFor,
-            });
+            };
+            entities.Add(entity);
+            if (entity.Type == EntityType.MyHero && entity.IsControlled && state.Turn >= Game.MinTurnToAttack)
+            {
+                HasBeenAttacked = true;
+            }
+            if (entity.Type == EntityType.OpponentHero && Map.Distance(entity.Pos, Map.MyBase) < Game.BaseVision && state.Turn >= Game.MinTurnToAttack)
+            {
+                HasBeenAttacked = true;
+            }
+            if (state.Turn >= Game.TurnToAttackIfNoWar)
+            {
+                HasBeenAttacked = true;
+            }
         }
         newState.MyHeros = entities.Where(entity => entity.Type == EntityType.MyHero).ToList();
         newState.Monsters = entities.Where(entity => entity.Type == EntityType.Monster).ToList();
@@ -124,8 +147,8 @@ class Player
     }
     static State Wind(State state, ACTIONS action, Parameters parameters = null)
     {
-        Coordinate baseCoord = Map.IntegerToCoordinates(Map.OpponentBase);
-        string cmd = $"SPELL WIND {baseCoord.X} {baseCoord.Y}";
+        Coordinate coords = Map.IntegerToCoordinates(parameters.Pos);
+        string cmd = $"SPELL WIND {coords.X} {coords.Y}";
         Console.Error.WriteLine(cmd);
         PendingCommands.Add(cmd);
         state.MyMana -= Game.SpellCost;
@@ -283,7 +306,7 @@ public class DefendState : HeroState
         IEnumerable<Entity> enemiesInWindRange = Threats.Where(entity => Map.IsInRange(state.MyHeros[Id].Pos, entity.Pos, Game.WindRange) && !entity.isShielded);
         int safetyDistance = enemiesInWindRange.Count() > 6 ? 4000 : 2000;
 
-        if (state.MyMana >= Game.SpellCost && !state.MyHeros[Id].isShielded && (state.OpponentHeroes.Any(opp => Map.IsInRange(opp.Pos, state.MyHeros[Id].Pos, Game.ControlRange)) || state.OpponentHeroes.Any(opp => Map.IsInRange(opp.Pos, Map.MyBase, Game.ControlRange))))
+        if (state.Turn >= Game.MinTurnToShield && state.MyMana >= Game.SpellCost && !state.MyHeros[Id].isShielded && (state.OpponentHeroes.Any(opp => Map.IsInRange(opp.Pos, state.MyHeros[Id].Pos, Game.ControlRange)) || state.OpponentHeroes.Any(opp => Map.IsInRange(opp.Pos, Map.MyBase, Game.BaseVision))))
         {
             state = Player.Update(state, ACTIONS.SHIELD, new Parameters()
             {
@@ -291,12 +314,12 @@ public class DefendState : HeroState
                 Id = state.MyHeros[Id].Id
             });
         }
-        else if (state.MyMana >= Game.SpellCost && enemiesInWindRange.Count() > 0 && Map.Distance(enemiesInWindRange.First().Pos, Map.MyBase) <= safetyDistance)
+        else if (state.MyMana >= Game.SpellCost && enemiesInWindRange.Any() && Map.Distance(enemiesInWindRange.First().Pos, Map.MyBase) <= safetyDistance)
         {
             state = Player.Update(state, ACTIONS.WIND, new Parameters()
             {
                 MyTurn = true,
-                Pos = state.MyHeros[Id].Pos
+                Pos = Map.OpponentBase
             });
         }
         else
@@ -312,18 +335,128 @@ public class DefendState : HeroState
     }
 }
 
+public class AttackState : HeroState
+{
+    private readonly int Id;
+    public AttackState(int id)
+    {
+        Id = id;
+    }
+    public State Act(State state)
+    {
+        IEnumerable<Entity> dangerousMonsters = state.Monsters.Where(entity => entity.ThreatFor == Target.Opponent && Map.IsInRange(Map.OpponentBase, entity.Pos, Game.BaseVision) && !entity.isShielded).OrderBy(entity => Map.Distance(entity.Pos, Map.OpponentBase));
+        IEnumerable<Entity> killerMonster = dangerousMonsters.Where(monster => Map.Distance(monster.Pos, Map.OpponentBase) / Game.MonsterSpeed < monster.Health / (Game.AttackDamage * 2));
+        IEnumerable<Entity> monstersInControlRange = state.Monsters.Where(entity => Map.IsInRange(state.MyHeros[Id].Pos, entity.Pos, Game.ControlRange) && !Map.IsInRange(Map.MyBase, entity.Pos, Game.MonsterBaseAttractRange) && !entity.isShielded && !entity.IsControlled && entity.ThreatFor != Target.Opponent).OrderBy(monster => Map.Distance(monster.Pos, Map.MyBase));
+        IEnumerable<Entity> opponentsInBase = state.OpponentHeroes.Where(opp => Map.IsInRange(opp.Pos, Map.OpponentBase, Game.BaseVision)).OrderBy(opp => Map.Distance(opp.Pos, Map.OpponentBase));
+        if (killerMonster.Any())
+        {
+            Entity closestMonster = killerMonster.First();
+            if (state.MyMana >= Game.SpellCost && Map.IsInRange(closestMonster.Pos, state.MyHeros[Id].Pos, Game.ShieldRange))
+            {
+                return state = Player.Update(state, ACTIONS.SHIELD, new Parameters()
+                {
+                    MyTurn = true,
+                    Id = closestMonster.Id
+                });
+            }
+            else
+            {
+                return state = Player.Update(state, ACTIONS.MOVE, new Parameters()
+                {
+                    MyTurn = true,
+                    Id = Id,
+                    Pos = closestMonster.Pos
+                });
+            }
+        }
+        if (opponentsInBase.Any(opp => !opp.isShielded))
+        {
+            Entity closestOpponent = opponentsInBase.First(opp => !opp.isShielded);
+            if (state.MyMana >= Game.SpellCost && Map.IsInRange(closestOpponent.Pos, state.MyHeros[Id].Pos, Game.ControlRange))
+            {
+                return state = Player.Update(state, ACTIONS.CONTROL, new Parameters()
+                {
+                    MyTurn = true,
+                    Id = closestOpponent.Id,
+                    Pos = Map.MyBase
+                });
+            }
+            else
+            {
+                return state = Player.Update(state, ACTIONS.MOVE, new Parameters()
+                {
+                    MyTurn = true,
+                    Id = Id,
+                    Pos = closestOpponent.Pos
+                });
+            }
+        }
+        if (dangerousMonsters.Any())
+        {
+            IEnumerable<Entity> enemiesInWindRange = dangerousMonsters.Where(entity => Map.IsInRange(state.MyHeros[Id].Pos, entity.Pos, Game.WindRange) && !entity.isShielded);
+            if (state.MyMana >= Game.SpellCost && enemiesInWindRange.Any() && Map.Distance(enemiesInWindRange.First().Pos, Map.MyBase) <= 2500)
+            {
+                state = Player.Update(state, ACTIONS.WIND, new Parameters()
+                {
+                    MyTurn = true,
+                    Pos = Map.OpponentBase
+                });
+            }
+            Entity closestMonster = dangerousMonsters.First();
+            if (state.MyMana >= Game.SpellCost && Map.IsInRange(closestMonster.Pos, state.MyHeros[Id].Pos, Game.ShieldRange))
+            {
+                return state = Player.Update(state, ACTIONS.SHIELD, new Parameters()
+                {
+                    MyTurn = true,
+                    Id = closestMonster.Id
+                });
+            }
+            else
+            {
+                return state = Player.Update(state, ACTIONS.MOVE, new Parameters()
+                {
+                    MyTurn = true,
+                    Id = Id,
+                    Pos = closestMonster.Pos
+                });
+            }
+        }
+        if (state.MyMana >= Game.SpellCost && monstersInControlRange.Any())
+        {
+            Entity firstInRange = monstersInControlRange.OrderBy(monster => Map.Distance(monster.Pos, Map.MyBase)).First();
+            Player.MonstersControlled++;
+            return state = Player.Update(state, ACTIONS.CONTROL, new Parameters()
+            {
+                MyTurn = true,
+                Id = firstInRange.Id,
+                Pos = Map.OpponentBase
+            });
+        }
+        else
+        {
+            Console.Error.WriteLine($"HERE {Player.MonstersControlled}");
+            return state = Player.Update(state, ACTIONS.MOVE, new Parameters()
+            {
+                MyTurn = true,
+                Pos = Player.MonstersControlled >= 10 ? Map.KillPoints[Id] : Map.AttackPoints[Id],
+                Id = Id
+            });
+        }
+        return state;
+    }
+}
+
 public class Entity : ICloneable<Entity>
 {
     public int Id { get; set; }
     public EntityType Type { get; set; }
     public int Pos { get; set; }
     public int ShieldLife { get; set; }
-    public int IsControlled { get; set; }
+    public bool IsControlled { get; set; }
     public int Health { get; set; }
     public Coordinate Velocity { get; set; }
     public NearBase NearBase { get; set; }
     public Target ThreatFor { get; set; }
-    public int Speed => Type == EntityType.Monster ? 400 : 800;
     public int NextPos => Map.CoordinatesToInteger(Map.IntegerToCoordinates(Pos) + Velocity);
     public bool isShielded => ShieldLife > 0;
     public HeroState state { get; set; }
@@ -363,6 +496,12 @@ public static class Game
     public const int ShieldRange = 2200;
     public const int ControlRange = 2200;
     public const int MaxTurn = 220;
+    public const int MinTurnToShield = 60;
+    public const int MinTurnToAttack = 100;
+    public const int TurnToAttackIfNoWar = 150;
+    public const int MonsterSpeed = 400;
+    public const int HeroSpeed = 800;
+
 
 }
 public class Map
@@ -374,17 +513,29 @@ public class Map
     public static bool IsTopBase => MyBase == 0;
     private Coordinate SymmetryOrigin = new Coordinate((WIDTH - 1) / 2, (HEIGHT - 1) / 2);
     private const int coverDistance = Game.BaseVision + Game.HeroVision / 2;
+    private const int attackDistance = Game.BaseVision;
+    private const int killDistance = 3000;
     private const double coverAngle = 22.5 * Math.PI / 180;
+    private const double attackAngle = 45 * Math.PI / 180;
     public static int[] CoverPoints = new int[3];
-    public static void GetCoverPoints()
+    public static int[] AttackPoints = new int[3];
+    public static int[] KillPoints = new int[3];
+    public static void GetKeyPoints()
     {
         for (int i = 0; i < 3; i++)
         {
             int x = (int)(coverDistance * Math.Cos((i + 1) * coverAngle));
             int y = (int)(coverDistance * Math.Sin((i + 1) * coverAngle));
             Coordinate myBase = IntegerToCoordinates(MyBase);
+            Coordinate opponentBase = IntegerToCoordinates(OpponentBase);
             int sign = IsTopBase ? 1 : -1;
             CoverPoints[i] = CoordinatesToInteger(new Coordinate(myBase.X + sign * x, myBase.Y + sign * y));
+            x = (int)(attackDistance * Math.Cos(attackAngle));
+            y = (int)(attackDistance * Math.Sin(attackAngle));
+            AttackPoints[i] = CoordinatesToInteger(new Coordinate(opponentBase.X - sign * x, opponentBase.Y - sign * y));
+            x = (int)(killDistance * Math.Cos(attackAngle));
+            y = (int)(killDistance * Math.Sin(attackAngle));
+            KillPoints[i] = CoordinatesToInteger(new Coordinate(opponentBase.X - sign * x, opponentBase.Y - sign * y));
         }
     }
     public static bool IsInMap(Coordinate position)

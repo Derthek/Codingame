@@ -39,10 +39,16 @@ namespace PowerOfThor
                     int y = int.Parse(inputs[1]);
                     giants.Add(new Giant(x, y));
                 }
+                if(state.Giants.Count!=giants.Count){ Console.Error.WriteLine("ERR: giant count diff "+state.Giants.Count+" "+giants.Count);}
+                else{
+                    for(int i = 0; i < state.Giants.Count; i++){
+                        if(state.Giants[i].X!=giants[i].X ||state.Giants[i].Y!=giants[i].Y ) Console.Error.WriteLine($"ERR: giant diff:{state.Giants[i].X}!={giants[i].X} || {state.Giants[i].Y}!={giants[i].Y}");
+                    }
+                }
                 state.Giants = giants;
                 Console.Error.WriteLine(state.ToString());
 #endif
-                action = game.PlayAI(state, action);
+                action = game.PlayAI(state);
                 Console.WriteLine(action);
 
                 giants = new List<Giant>();
@@ -85,32 +91,6 @@ namespace PowerOfThor
             }
             return dir;
         }
-        //public string Move(int toPos)
-        //{
-        //    string dir = "";
-        //    Coordinate toCoordinate = Map.IntegerToCoords(toPos);
-        //    if (Y > toCoordinate.Y)
-        //    {
-        //        dir += "N";
-        //        Y--;
-        //    }
-        //    else if (Y < toCoordinate.Y)
-        //    {
-        //        dir += "S";
-        //        Y++;
-        //    }
-        //    if (X > toCoordinate.X)
-        //    {
-        //        dir += "W";
-        //        X--;
-        //    }
-        //    else if (X < toCoordinate.X)
-        //    {
-        //        dir += "E";
-        //        X++;
-        //    }
-        //    return dir;
-        //}
         public void Move(string action)
         {
             if (action.Contains("N"))
@@ -154,7 +134,7 @@ namespace PowerOfThor
         public Giant() : base() { }
         public bool IsStrikeable(Coordinate from)
         {
-            return Map.IsInRange(from, new Coordinate(X, Y), Constants.StrikeSize);
+            return Math.Abs(from.X - X) < Constants.StrikeSize && Math.Abs(from.Y - Y) < Constants.StrikeSize;
         }
         public Giant Clone()
         {
@@ -163,6 +143,21 @@ namespace PowerOfThor
                 X = X,
                 Y = Y
             };
+        }
+        public new void Move(int x, int y)
+        {
+            // Giant won't move if position is the same
+            if (x == X && y == Y) return;
+
+            double angleToThor = Math.Atan2(y - Y, x - X);
+            for (int i = 0; i < Game.Angles.Length; i++)
+            {
+                if (angleToThor.Between(Game.Angles[i], Game.Angles[i] + Game.AngleRange[i]))
+                {
+                    Move(Game.AngleDirection[i]);
+                    break;
+                }
+            }
         }
     }
     public static class Map
@@ -177,34 +172,13 @@ namespace PowerOfThor
         {
             return IsInMap(coord.X, coord.Y);
         }
-        //public static bool IsInMap(int pos)
-        //{
-        //    return IsInMap(IntegerToCoords(pos));
-        //}
-        //public static bool IsInRange(int center, int target, int range) => Distance(center, target) <= range;
         public static bool IsInRange(Coordinate center, Coordinate target, int range) => Distance(center, target) <= range;
-        //public static int Distance(int a, int b)
-        //{
-        //    return Distance(Map.IntegerToCoords(a), Map.IntegerToCoords(b));
-        //}
         public static int Distance(Coordinate a, Coordinate b)
         {
             int dx = a.X - b.X;
             int dy = a.Y - b.Y;
             return Math.Abs(dx) + Math.Abs(dy);
         }
-        //public static Coordinate IntegerToCoords(int integer)
-        //{
-        //    return new Coordinate(integer % WIDTH, integer / WIDTH);
-        //}
-        //public static int CoordsToInteger(int x, int y)
-        //{
-        //    return x + y * WIDTH;
-        //}
-        //public static int CoordsToInteger(Coordinate coord)
-        //{
-        //    return CoordsToInteger(coord.X, coord.Y);
-        //}
         public static Coordinate GetCentroid(IEnumerable<Coordinate> coordinates, int length)
         {
             return coordinates.Aggregate(new Coordinate(0, 0), (acc, next) => acc + next, result => result / length);
@@ -277,7 +251,7 @@ namespace PowerOfThor
     {
         public int Turn { get; set; }
         public Thor Thor { get; set; }
-        public List<Giant> Giants { get; set; }
+        public List<Giant> Giants { get; set; } = new List<Giant>();
         public int NumberOfStrikes { get; set; }
         public new string ToString()
         {
@@ -298,33 +272,36 @@ namespace PowerOfThor
     {
         public Algorithm.MCTS.Node Tree { get; set; }
         public static readonly int MaxIterations = 128;
-        public static readonly int MaxTimeInMs = 80;
+        public static readonly int MaxTimeInMs = 100;
         public static readonly Random Random = new Random();
         public const int MAX_TURNS = 200;
         public static readonly string[] Actions = new string[] { "WAIT", "STRIKE", "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
+        private static readonly double AngleRangeBase = Math.PI * 27.85 / 180;
+        public static readonly double[] AngleRange = new double[] { 2 * AngleRangeBase, Math.PI / 2 - 2 * AngleRangeBase, 2 * AngleRangeBase, Math.PI / 2 - 2 * AngleRangeBase, 2 * AngleRangeBase, Math.PI / 2 - 2 * AngleRangeBase, 2 * AngleRangeBase, Math.PI / 2 - 2 * AngleRangeBase, 2 * AngleRangeBase };
+        public static readonly string[] AngleDirection = new string[] { "W", "NW", "N", "NE", "E", "SE", "S", "SW", "W" };
+        public static readonly double[] Angles = new double[] { -Math.PI - AngleRangeBase, -Math.PI + AngleRangeBase, -Math.PI / 2 - AngleRangeBase, -Math.PI / 2 + AngleRangeBase, -AngleRangeBase, AngleRangeBase, Math.PI / 2 - AngleRangeBase, Math.PI / 2 + AngleRangeBase, Math.PI - AngleRangeBase };
 
-        public string PlayAI(State state, string action)
+        public string PlayAI(State state)
         {
-            if (action != "" && Tree != null)
-            {
-                Tree = Tree.Childs.FirstOrDefault(c => c.Action == action);
-                Console.Error.WriteLine(action);
-                Console.Error.WriteLine(Tree.Action);
-                Console.Error.WriteLine(Tree.Iterations);
-                Console.Error.WriteLine(Tree.Childs);
-            }
-            Tree = Algorithm.MCTS.Run(Tree, state);
-
+            Tree = Algorithm.MCTS.Run(null, state);
             Play(state, Tree.Action);
-            Console.Error.WriteLine(Tree.ToString());
             return Tree.Action;
         }
-        public State Play(State state, string action)
+        public static State Play(State state, string action)
         {
-            // We don't need to update the values for the other actions since we will get updated values in the next cycle
             if (action != "WAIT" && action != "STRIKE")
             {
                 state.Thor.Move(action);
+            }
+            foreach (Giant giant in state.Giants)
+            {
+                giant.Move(state.Thor.X, state.Thor.Y);
+            }
+            if (action == "STRIKE")
+            {
+                Coordinate thorCoords = new Coordinate(state.Thor.X, state.Thor.Y);
+                state.Giants = state.Giants.Where(giant => !giant.IsStrikeable(thorCoords)).ToList();
+                state.NumberOfStrikes--;
             }
             state.Turn++;
             return state;
@@ -332,21 +309,7 @@ namespace PowerOfThor
         public static State Simulate(State state, string action)
         {
             State newState = state.Clone();
-            if (action != "WAIT")
-            {
-                if (action == "STRIKE")
-                {
-                    Coordinate thorCoords = new Coordinate(state.Thor.X, state.Thor.Y);
-                    newState.Giants = newState.Giants.Except(newState.Giants.Where(giant => giant.IsStrikeable(thorCoords))).ToList();
-                    newState.NumberOfStrikes--;
-                }
-                else
-                {
-                    newState.Thor.Move(action);
-                }
-            }
-            newState.Giants.ForEach(giant => giant.Move(newState.Thor.X, newState.Thor.Y));
-            return newState;
+            return Play(newState, action);
         }
         public static bool IsGameOver(State state)
         {
@@ -354,7 +317,7 @@ namespace PowerOfThor
             {
                 return true;
             }
-            if (state.NumberOfStrikes == 0 && state.Giants.Count != 0)
+            if (state.NumberOfStrikes <= 0 && state.Giants.Count != 0)
             {
                 return true;
             }
@@ -385,19 +348,22 @@ namespace PowerOfThor
                 public double GetScore(State state)
                 {
                     if (Score != Scores.Initial) return Score;
-
-                    if (state.Giants.Count == 0)
-                    {
-                        Score = Scores.Win;
-                        return Score;
-                    }
                     if (Game.IsGameOver(state))
                     {
                         Score = Scores.Lose;
                         return Score;
                     }
-                    int distanceToCentroid = Map.Distance(new Coordinate(state.Thor.X, state.Thor.Y), Map.GetCentroid(state.Giants.Select(giant => new Coordinate(giant.X, giant.Y)), state.Giants.Count));
-                    Score = distanceToCentroid;
+                    if (state.Giants.Count == 0)
+                    {
+                        Score = Scores.Win;
+                        return Score;
+                    }
+                    Coordinate centroid = Map.GetCentroid(state.Giants.Select(giant => new Coordinate(giant.X, giant.Y)), state.Giants.Count);
+                    double avgDistanceToCentroid = state.Giants.Average(giant => Map.Distance(new Coordinate(giant.X, giant.Y), centroid));
+                    int distanceToCentroid = Map.Distance(new Coordinate(state.Thor.X, state.Thor.Y), centroid);
+                    Score = 100 - avgDistanceToCentroid + 10 * state.NumberOfStrikes + Game.MAX_TURNS - state.Turn;
+                    //Score = 100 - avgDistanceToCentroid + 100 - distanceToCentroid + 10 * state.NumberOfStrikes + Game.MAX_TURNS - state.Turn;
+                    //Score = state.NumberOfStrikes;
                     return Score;
                 }
                 public Node SelectChild(State state, int parentIterations)
@@ -451,13 +417,14 @@ namespace PowerOfThor
                     Rollout(root, root.Iterations, state.Clone());
                     if (root.Score == Scores.Win) break;
                 }
-                Console.Error.WriteLine("END");
                 List<Node> candidates = root.Childs.Where(c => c.Score == Scores.Win).ToList();
-                if (candidates.Count > 0) return candidates.OrderBy(c => c.Iterations).Last(); // winning move
+                Console.Error.WriteLine(string.Join(",", candidates.Select(c => $"{c.Score}:{c.Action}")));
+                if (candidates.Count > 0) return candidates.OrderBy(c => c.Score).Last(); // winning move
                 candidates = root.Childs.ToList();
+                Console.Error.WriteLine(string.Join(",", candidates.Select(c => $"{c.ToString()}:{c.Score}:{c.Action}")));
                 if (candidates.All(c => c.Score == Scores.Lose)) return candidates.OrderBy(c => c.Iterations).Last(); // losing anyway
                 List<Node> stillPlaying = candidates.Where(c => c.Score != Scores.Lose).ToList();
-                return stillPlaying.OrderBy(c => c.Iterations).Last();
+                return stillPlaying.OrderBy(c => c.Score).Last();
             }
             public static double Rollout(Node node, int parentIterations, State state)
             {
@@ -465,7 +432,7 @@ namespace PowerOfThor
                 if (score == Scores.Lose || score == Scores.Win)
                 {
                     node.Iterations++;
-                    node.Wins += score;
+                    node.Wins += score == Scores.Win ? 1 : 0;
                     return score;
                 }
 
@@ -475,7 +442,7 @@ namespace PowerOfThor
 
                 double result = Rollout(child, parentIterations, newState);
                 node.Iterations++;
-                node.Wins += result;
+                node.Wins += result == Scores.Win ? 1 : result != Scores.Lose ? Scores.Continue : Scores.Lose;
 
                 if (child.Score == Scores.Win)
                     node.Score = Scores.Win;
@@ -498,13 +465,17 @@ namespace PowerOfThor
         public static readonly double Initial = -2;
         public static readonly double Continue = -1;
         public static readonly double Lose = 0;
-        public static readonly double Win = 1000;
+        public static readonly double Win = 10000;
     }
     public static class Extensions
     {
         public static bool Between(this int value, int lowerBound, int upperBound)
         {
-            return value >= lowerBound && value <= upperBound;
+            return value > lowerBound && value <= upperBound;
+        }
+        public static bool Between(this double value, double lowerBound, double upperBound)
+        {
+            return value > lowerBound && value <= upperBound;
         }
     }
     public static class Constants

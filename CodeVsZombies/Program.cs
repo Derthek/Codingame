@@ -87,6 +87,10 @@ public static class Algorithm
         Console.Error.WriteLine("Elapsed: " + sw.ElapsedMilliseconds);
         Console.Error.WriteLine("Iterations: " + count);
         Console.Error.WriteLine("BestStrategy: " + Game.BestStrategy.Score);
+        if (Game.BestStrategy.Coordinates.Count == 0)
+        {
+            return state.Humans[0].Coords;
+        }
         return Game.BestStrategy.Coordinates.Dequeue();
     }
     public static Strategy GenerateStrategy(State state)
